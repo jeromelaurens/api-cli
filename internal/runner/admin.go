@@ -80,7 +80,7 @@ func (c *CLI) runProfile(args []string) int {
 		if jsonMode {
 			return c.writeAdminJSON(profile)
 		}
-		fmt.Fprintf(c.Out, "Profile: %s\nService: %s\nBase URL: %s\nRead only: %t\nAuth scheme: %s\n", args[1], profile.Service, profile.BaseURL, profile.ReadOnly, profile.Auth.Scheme)
+		writeProfileText(c.Out, args[1], profile)
 		return 0
 	case "create":
 		return c.runProfileCreate(args[1:], jsonMode)
@@ -108,6 +108,20 @@ const supportedAuthSchemePromptValues = "bearer|header|query|basic"
 
 func profileCreateAuthSchemePromptLabel() string {
 	return "Auth scheme (" + supportedAuthSchemePromptValues + ")"
+}
+
+func writeProfileText(out io.Writer, name string, profile Profile) {
+	fmt.Fprintf(out, "Profile: %s\nService: %s\nBase URL: %s\nRead only: %t\nAuth scheme: %s\n", name, profile.Service, profile.BaseURL, profile.ReadOnly, profile.Auth.Scheme)
+	switch profile.Auth.Scheme {
+	case "bearer":
+		fmt.Fprintf(out, "Credential: %s\n", profile.Auth.Credential)
+	case "header":
+		fmt.Fprintf(out, "Header: %s\nCredential: %s\n", profile.Auth.Header, profile.Auth.Credential)
+	case "query":
+		fmt.Fprintf(out, "Query parameter: %s\nCredential: %s\n", profile.Auth.Param, profile.Auth.Credential)
+	case "basic":
+		fmt.Fprintf(out, "Username credential: %s\nPassword credential: %s\n", profile.Auth.UsernameCredential, profile.Auth.PasswordCredential)
+	}
 }
 
 func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {

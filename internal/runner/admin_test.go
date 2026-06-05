@@ -105,6 +105,73 @@ func TestProfileShowJSONAndTextErrorPolicy(t *testing.T) {
 	assertJSONError(t, missingJSON.stdout, CodeProfileNotFound)
 }
 
+func TestProfileShowTextIncludesAuthConfigurationWithoutSecrets(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"dolibarr": {
+				"service": "dolibarr",
+				"baseURL": "https://dolibarr.example.test/api/index.php",
+				"auth": {"scheme": "header", "header": "DOLAPIKEY", "credential": "api-key"}
+			}
+		}
+	}`)
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "show", "dolibarr")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	for _, want := range []string{
+		"Auth scheme: header",
+		"Header: DOLAPIKEY",
+		"Credential: api-key",
+	} {
+		if !strings.Contains(result.stdout, want) {
+			t.Fatalf("profile show text missing %q:\n%s", want, result.stdout)
+		}
+	}
+}
+
+func TestProfileShowTextIncludesAuthConfigurationForSupportedSchemes(t *testing.T) {
+	tests := []struct {
+		name string
+		auth AuthConfig
+		want []string
+	}{
+		{
+			name: "bearer",
+			auth: AuthConfig{Scheme: "bearer", Credential: "api-token"},
+			want: []string{"Auth scheme: bearer", "Credential: api-token"},
+		},
+		{
+			name: "query",
+			auth: AuthConfig{Scheme: "query", Param: "api_token", Credential: "api-token"},
+			want: []string{"Auth scheme: query", "Query parameter: api_token", "Credential: api-token"},
+		},
+		{
+			name: "basic",
+			auth: AuthConfig{Scheme: "basic", UsernameCredential: "identifier", PasswordCredential: "key"},
+			want: []string{"Auth scheme: basic", "Username credential: identifier", "Password credential: key"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			writeProfileText(&out, "profile", Profile{
+				Service: "service",
+				BaseURL: "https://api.example.test/v1",
+				Auth:    tt.auth,
+			})
+			for _, want := range tt.want {
+				if !strings.Contains(out.String(), want) {
+					t.Fatalf("profile text missing %q:\n%s", want, out.String())
+				}
+			}
+		})
+	}
+}
+
 func TestProfileCreateHeaderProfileFromGenericFlagsCreatesCatalog(t *testing.T) {
 	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
 

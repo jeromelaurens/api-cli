@@ -268,7 +268,10 @@ Default output is human-readable text; `--json` emits:
 
 `api profile show <profile>` returns `profile_not_found` if the catalog or
 profile is missing. By default that error is text on stderr; with `--json`, it
-is JSON on stdout.
+is JSON on stdout. In text mode, `profile show` prints all non-secret auth
+configuration fields needed to understand which credential names are expected
+(`header`, `param`, `credential`, `usernameCredential`,
+`passwordCredential`). It never reads or prints keyring credential values.
 
 `api profile create <profile>` creates the profile catalog if missing and writes
 non-secret profile data only. It creates the catalog directory with owner-only
