@@ -113,16 +113,16 @@ func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
 		return c.writeAdminError(err, jsonMode)
 	}
 
-	profile, err := c.buildProfileFromCreateOptions(opts)
-	if err != nil {
-		return c.writeAdminError(err, jsonMode)
-	}
 	catalog, _, err := LoadCatalogOrEmpty(c.ProfilesPath)
 	if err != nil {
 		return c.writeAdminError(err, jsonMode)
 	}
 	if _, exists := catalog.Profiles[opts.Name]; exists {
 		return c.writeAdminError(codedError(CodeProfileCatalogInvalid, "profile %s already exists", opts.Name), jsonMode)
+	}
+	profile, err := c.buildProfileFromCreateOptions(opts)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
 	}
 	catalog.Profiles[opts.Name] = profile
 	if err := SaveCatalog(c.ProfilesPath, *catalog); err != nil {

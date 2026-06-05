@@ -291,6 +291,35 @@ func TestProfileCreateRejectsDuplicateProfile(t *testing.T) {
 	assertJSONError(t, result.stdout, CodeProfileCatalogInvalid)
 }
 
+func TestProfileCreateRejectsDuplicateProfileBeforeInteractivePrompts(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"mailerlite": {
+				"service": "mailerlite",
+				"baseURL": "https://connect.mailerlite.example.test/api",
+				"auth": {"scheme": "bearer", "credential": "api-token"}
+			}
+		}
+	}`)
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "create", "mailerlite", "--json")
+	if result.code == 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	var payload struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	mustJSON(t, result.stdout, &payload)
+	if payload.OK || payload.Error.Code != CodeProfileCatalogInvalid || !strings.Contains(payload.Error.Message, "profile mailerlite already exists") {
+		t.Fatalf("error payload = %+v", payload)
+	}
+}
+
 func TestProfileCreateRejectsPresetsToKeepCLIGeneric(t *testing.T) {
 	result := runCLI(t, testCLIOptions{profilesPath: filepath.Join(t.TempDir(), "profiles.json")},
 		"profile", "create", "dolibarr", "--preset", "dolibarr", "--json",

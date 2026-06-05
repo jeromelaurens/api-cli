@@ -273,7 +273,8 @@ is JSON on stdout.
 `api profile create <profile>` creates the profile catalog if missing and writes
 non-secret profile data only. It creates the catalog directory with owner-only
 permissions where the operating system supports them, writes the catalog file as
-owner-only read/write, and rejects duplicate profiles.
+owner-only read/write, and rejects duplicate profiles before prompting for any
+missing interactive field.
 
 Profile create is generic. It accepts non-secret profile fields as flags:
 
