@@ -14,7 +14,7 @@ api request <profile> <METHOD> <path> [--query "..."] [--body file|-] [--header 
 api profile path [--json]
 api profile list [--json]
 api profile show <profile> [--json]
-api profile create <profile> [--preset <name>] [--base-url <url>] [--read-only] [--json]
+api profile create <profile> [--service <name>] [--base-url <url>] [--auth <scheme>] [auth flags] [--read-only] [--json]
 api secret set <profile> <credential> [--json]
 api secret list [<profile>] [--check] [--json]
 api secret delete <profile> <credential> [--json]
@@ -64,14 +64,15 @@ Overrides:
 2. `API_PROFILES`
 3. default `~/.api/profiles.json`
 
-The CLI can create profiles in v1:
+The CLI can create profiles in v1 with generic auth flags:
 
 ```sh
-api profile create dolibarr --preset dolibarr
-api profile create mailerlite --preset mailerlite
-api profile create pipedrive --preset pipedrive
-api profile create pennylane --preset pennylane
-api profile create crisp --preset crisp
+api profile create billing \
+  --service billing \
+  --base-url "https://api.example.test/v1" \
+  --auth header \
+  --header X-API-Key \
+  --credential api-key
 ```
 
 `profile create` writes non-secret profile data only. It creates the directory
@@ -328,14 +329,41 @@ auth query parameters.
 
 ## Real-Service Smoke Tests
 
-Create the non-secret profiles with presets first:
+Create the non-secret profiles first:
 
 ```sh
-api profile create dolibarr --preset dolibarr
-api profile create mailerlite --preset mailerlite
-api profile create pipedrive --preset pipedrive
-api profile create pennylane --preset pennylane
-api profile create crisp --preset crisp
+api profile create dolibarr \
+  --service dolibarr \
+  --base-url "https://TON-DOLIBARR/api/index.php" \
+  --auth header \
+  --header DOLAPIKEY \
+  --credential api-key
+
+api profile create mailerlite \
+  --service mailerlite \
+  --base-url "https://connect.mailerlite.com/api" \
+  --auth bearer \
+  --credential api-token
+
+api profile create pipedrive \
+  --service pipedrive \
+  --base-url "https://api.pipedrive.com/v1" \
+  --auth query \
+  --param api_token \
+  --credential api-token
+
+api profile create pennylane \
+  --service pennylane \
+  --base-url "https://app.pennylane.com/api/external/v2" \
+  --auth bearer \
+  --credential access-token
+
+api profile create crisp \
+  --service crisp \
+  --base-url "https://api.crisp.chat/v1" \
+  --auth basic \
+  --username-credential identifier \
+  --password-credential key
 ```
 
 Then store credentials in the OS keyring:

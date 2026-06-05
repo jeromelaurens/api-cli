@@ -22,7 +22,7 @@ Commands:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
-  api profile create <profile> [--preset name] [--base-url url] [--read-only] [--json]
+  api profile create <profile> [--service name] [--base-url url] [--auth scheme] [auth flags] [--read-only] [--json]
   api secret set <profile> <credential> [--json]
   api secret list [<profile>] [--check] [--json]
   api secret delete <profile> <credential> [--json]
@@ -41,10 +41,10 @@ Auth schemes:
   bearer, header, query, basic.
 
 Examples:
-  api request dolibarr GET /thirdparties --query "limit=10"
+  api request billing GET /invoices --query "limit=10"
   api profile list --json
-  api profile create mailerlite --preset mailerlite
-  api secret set crisp identifier
+  api profile create billing --service billing --base-url "https://api.example.test/v1" --auth bearer --credential api-token
+  api secret set billing api-token
 `
 
 const requestHelp = `Usage:
@@ -70,23 +70,25 @@ const profileHelp = `Usage:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
-  api profile create <profile> [--preset dolibarr|mailerlite|pipedrive|pennylane|crisp|sentry] [--base-url url] [--read-only] [--json]
+  api profile create <profile> [--service name] [--base-url url] [--auth bearer|header|query|basic] [--read-only] [--json]
 
 Profile catalog:
   Default path: ~/.api/profiles.json
   Override priority: --profiles, API_PROFILES, default path
   profile create writes non-secret profile data only. It does not store credentials.
 
-Presets:
-  --preset dolibarr prompts for the instance base URL and uses DOLAPIKEY with credential api-key.
-  --preset mailerlite uses https://connect.mailerlite.com/api and credential api-token.
-  --preset pipedrive uses https://api.pipedrive.com/v1 and query credential api-token.
-  --preset pennylane uses https://app.pennylane.com/api/external/v2 and credential access-token.
-  --preset crisp uses https://api.crisp.chat/v1 and credentials identifier and key.
+Auth flags:
+  bearer: --credential name
+  header: --header name --credential name
+  query: --param name --credential name
+  basic: --username-credential name --password-credential name
+
+Interactive mode:
+  Missing non-secret fields are prompted. The service name defaults to the profile name.
 
 Examples:
-  api profile create dolibarr --preset dolibarr
-  api profile create mailerlite --preset mailerlite
+  api profile create billing --service billing --base-url "https://api.example.test/v1" --auth header --header X-API-Key --credential api-key
+  api profile create support --service support --base-url "https://support.example.test/v1" --auth basic --username-credential identifier --password-credential key
 `
 
 const secretHelp = `Usage:

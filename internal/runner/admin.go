@@ -89,10 +89,16 @@ func (c *CLI) runProfile(args []string) int {
 }
 
 type profileCreateOptions struct {
-	Name     string
-	Preset   string
-	BaseURL  string
-	ReadOnly bool
+	Name               string
+	Service            string
+	BaseURL            string
+	ReadOnly           bool
+	AuthScheme         string
+	Header             string
+	Param              string
+	Credential         string
+	UsernameCredential string
+	PasswordCredential string
 }
 
 func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
@@ -142,15 +148,15 @@ func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
-		case arg == "--preset":
-			value, next, err := requireFlagValue(args, i, "--preset")
+		case arg == "--service":
+			value, next, err := requireFlagValue(args, i, "--service")
 			if err != nil {
 				return opts, err
 			}
-			opts.Preset = value
+			opts.Service = value
 			i = next
-		case strings.HasPrefix(arg, "--preset="):
-			opts.Preset = strings.TrimPrefix(arg, "--preset=")
+		case strings.HasPrefix(arg, "--service="):
+			opts.Service = strings.TrimPrefix(arg, "--service=")
 		case arg == "--base-url":
 			value, next, err := requireFlagValue(args, i, "--base-url")
 			if err != nil {
@@ -160,6 +166,60 @@ func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
 			i = next
 		case strings.HasPrefix(arg, "--base-url="):
 			opts.BaseURL = strings.TrimPrefix(arg, "--base-url=")
+		case arg == "--auth":
+			value, next, err := requireFlagValue(args, i, "--auth")
+			if err != nil {
+				return opts, err
+			}
+			opts.AuthScheme = value
+			i = next
+		case strings.HasPrefix(arg, "--auth="):
+			opts.AuthScheme = strings.TrimPrefix(arg, "--auth=")
+		case arg == "--header":
+			value, next, err := requireFlagValue(args, i, "--header")
+			if err != nil {
+				return opts, err
+			}
+			opts.Header = value
+			i = next
+		case strings.HasPrefix(arg, "--header="):
+			opts.Header = strings.TrimPrefix(arg, "--header=")
+		case arg == "--param":
+			value, next, err := requireFlagValue(args, i, "--param")
+			if err != nil {
+				return opts, err
+			}
+			opts.Param = value
+			i = next
+		case strings.HasPrefix(arg, "--param="):
+			opts.Param = strings.TrimPrefix(arg, "--param=")
+		case arg == "--credential":
+			value, next, err := requireFlagValue(args, i, "--credential")
+			if err != nil {
+				return opts, err
+			}
+			opts.Credential = value
+			i = next
+		case strings.HasPrefix(arg, "--credential="):
+			opts.Credential = strings.TrimPrefix(arg, "--credential=")
+		case arg == "--username-credential":
+			value, next, err := requireFlagValue(args, i, "--username-credential")
+			if err != nil {
+				return opts, err
+			}
+			opts.UsernameCredential = value
+			i = next
+		case strings.HasPrefix(arg, "--username-credential="):
+			opts.UsernameCredential = strings.TrimPrefix(arg, "--username-credential=")
+		case arg == "--password-credential":
+			value, next, err := requireFlagValue(args, i, "--password-credential")
+			if err != nil {
+				return opts, err
+			}
+			opts.PasswordCredential = value
+			i = next
+		case strings.HasPrefix(arg, "--password-credential="):
+			opts.PasswordCredential = strings.TrimPrefix(arg, "--password-credential=")
 		case arg == "--read-only":
 			opts.ReadOnly = true
 		case strings.HasPrefix(arg, "-"):
@@ -179,11 +239,7 @@ func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
 }
 
 func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile, error) {
-	if opts.Preset != "" {
-		return c.buildPresetProfile(opts)
-	}
-
-	service, err := c.promptRequired("Service", "")
+	service, err := c.promptRequired("Service", firstNonEmpty(opts.Service, opts.Name))
 	if err != nil {
 		return Profile{}, err
 	}
@@ -191,11 +247,11 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	if err != nil {
 		return Profile{}, err
 	}
-	scheme, err := c.promptRequired("Auth scheme", "")
+	scheme, err := c.promptRequired("Auth scheme", opts.AuthScheme)
 	if err != nil {
 		return Profile{}, err
 	}
-	auth, err := c.promptAuthConfig(strings.ToLower(scheme))
+	auth, err := c.promptAuthConfig(strings.ToLower(scheme), opts)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -206,108 +262,40 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	return profile, nil
 }
 
-func (c *CLI) buildPresetProfile(opts profileCreateOptions) (Profile, error) {
-	preset, ok := profilePresets()[strings.ToLower(opts.Preset)]
-	if !ok {
-		return Profile{}, codedError(CodeInvalidArgs, "unknown profile preset: %s", opts.Preset)
-	}
-	baseURL := opts.BaseURL
-	if baseURL == "" {
-		baseURL = preset.BaseURL
-	}
-	if baseURL == "" {
-		var err error
-		baseURL, err = c.promptRequired("Base URL", "")
-		if err != nil {
-			return Profile{}, err
-		}
-	}
-	profile := Profile{
-		Service:  preset.Service,
-		BaseURL:  baseURL,
-		ReadOnly: opts.ReadOnly,
-		Auth:     preset.Auth,
-	}
-	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{opts.Name: profile}}); err != nil {
-		return Profile{}, err
-	}
-	return profile, nil
-}
-
-type profilePreset struct {
-	Service string
-	BaseURL string
-	Auth    AuthConfig
-}
-
-func profilePresets() map[string]profilePreset {
-	return map[string]profilePreset{
-		"dolibarr": {
-			Service: "dolibarr",
-			Auth:    AuthConfig{Scheme: "header", Header: "DOLAPIKEY", Credential: "api-key"},
-		},
-		"mailerlite": {
-			Service: "mailerlite",
-			BaseURL: "https://connect.mailerlite.com/api",
-			Auth:    AuthConfig{Scheme: "bearer", Credential: "api-token"},
-		},
-		"pipedrive": {
-			Service: "pipedrive",
-			BaseURL: "https://api.pipedrive.com/v1",
-			Auth:    AuthConfig{Scheme: "query", Param: "api_token", Credential: "api-token"},
-		},
-		"pennylane": {
-			Service: "pennylane",
-			BaseURL: "https://app.pennylane.com/api/external/v2",
-			Auth:    AuthConfig{Scheme: "bearer", Credential: "access-token"},
-		},
-		"crisp": {
-			Service: "crisp",
-			BaseURL: "https://api.crisp.chat/v1",
-			Auth:    AuthConfig{Scheme: "basic", UsernameCredential: "identifier", PasswordCredential: "key"},
-		},
-		"sentry": {
-			Service: "sentry",
-			BaseURL: "https://sentry.io/api/0",
-			Auth:    AuthConfig{Scheme: "bearer", Credential: "auth-token"},
-		},
-	}
-}
-
-func (c *CLI) promptAuthConfig(scheme string) (AuthConfig, error) {
+func (c *CLI) promptAuthConfig(scheme string, opts profileCreateOptions) (AuthConfig, error) {
 	switch scheme {
 	case "bearer":
-		credential, err := c.promptRequired("Credential name", "")
+		credential, err := c.promptRequired("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "bearer", Credential: credential}, nil
 	case "header":
-		header, err := c.promptRequired("Header name", "")
+		header, err := c.promptRequired("Header name", opts.Header)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		credential, err := c.promptRequired("Credential name", "")
+		credential, err := c.promptRequired("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "header", Header: header, Credential: credential}, nil
 	case "query":
-		param, err := c.promptRequired("Query parameter", "")
+		param, err := c.promptRequired("Query parameter", opts.Param)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		credential, err := c.promptRequired("Credential name", "")
+		credential, err := c.promptRequired("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "query", Param: param, Credential: credential}, nil
 	case "basic":
-		username, err := c.promptRequired("Username credential name", "")
+		username, err := c.promptRequired("Username credential name", opts.UsernameCredential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		password, err := c.promptRequired("Password credential name", "")
+		password, err := c.promptRequired("Password credential name", opts.PasswordCredential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
@@ -315,6 +303,15 @@ func (c *CLI) promptAuthConfig(scheme string) (AuthConfig, error) {
 	default:
 		return AuthConfig{}, codedError(CodeProfileCatalogInvalid, "auth.scheme is not supported: %s", scheme)
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (c *CLI) promptRequired(label string, defaultValue string) (string, error) {

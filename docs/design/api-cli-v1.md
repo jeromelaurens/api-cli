@@ -275,32 +275,25 @@ non-secret profile data only. It creates the catalog directory with owner-only
 permissions where the operating system supports them, writes the catalog file as
 owner-only read/write, and rejects duplicate profiles.
 
-Profile create supports known service presets:
+Profile create is generic. It accepts non-secret profile fields as flags:
 
 ```text
-api profile create dolibarr --preset dolibarr
-api profile create mailerlite --preset mailerlite
-api profile create pipedrive --preset pipedrive
-api profile create pennylane --preset pennylane
-api profile create crisp --preset crisp
+api profile create <profile> \
+  --service <service> \
+  --base-url <url> \
+  --auth bearer|header|query|basic \
+  [auth flags]
 ```
 
-Preset defaults:
+Auth-specific flags:
 
-- `dolibarr`: prompts for the instance base URL, uses header auth
-  `DOLAPIKEY` and credential `api-key`.
-- `mailerlite`: uses `https://connect.mailerlite.com/api`, bearer auth, and
-  credential `api-token`.
-- `pipedrive`: uses `https://api.pipedrive.com/v1`, query auth parameter
-  `api_token`, and credential `api-token`.
-- `pennylane`: uses `https://app.pennylane.com/api/external/v2`, bearer auth,
-  and credential `access-token`.
-- `crisp`: uses `https://api.crisp.chat/v1`, basic auth, and credentials
-  `identifier` and `key`.
+- `bearer`: `--credential <name>`
+- `header`: `--header <name> --credential <name>`
+- `query`: `--param <name> --credential <name>`
+- `basic`: `--username-credential <name> --password-credential <name>`
 
-If no preset is supplied, `profile create` prompts for the non-secret profile
-fields: service name, base URL, auth scheme, and credential names. It never
-prompts for credential values.
+Missing non-secret fields are prompted interactively. The service name defaults
+to the profile name. `profile create` never prompts for credential values.
 
 `api secret list [<profile>]` requires the catalog. Without `--check`, it does
 not read the keyring. With `--check`, it adds `present` in `--json` mode or a
@@ -371,7 +364,7 @@ Required v1 tests:
 
 - global and subcommand help output
 - default human-readable admin output and admin `--json` output
-- interactive and preset profile creation
+- interactive and flag-driven profile creation
 - profile catalog parsing and validation
 - default and override profile catalog path resolution
 - path and query rejection

@@ -105,13 +105,18 @@ func TestProfileShowJSONAndTextErrorPolicy(t *testing.T) {
 	assertJSONError(t, missingJSON.stdout, CodeProfileNotFound)
 }
 
-func TestProfileCreateDolibarrPresetPromptsForBaseURLAndCreatesCatalog(t *testing.T) {
+func TestProfileCreateHeaderProfileFromGenericFlagsCreatesCatalog(t *testing.T) {
 	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
 
-	result := runCLI(t, testCLIOptions{
-		profilesPath: catalogPath,
-		stdin:        "https://dolibarr.example.test/api/index.php\n",
-	}, "profile", "create", "dolibarr", "--preset", "dolibarr", "--json")
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath},
+		"profile", "create", "dolibarr",
+		"--service", "dolibarr",
+		"--base-url", "https://dolibarr.example.test/api/index.php",
+		"--auth", "header",
+		"--header", "DOLAPIKEY",
+		"--credential", "api-key",
+		"--json",
+	)
 	if result.code != 0 || result.stderr != "" {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
 	}
@@ -141,10 +146,16 @@ func TestProfileCreateDolibarrPresetPromptsForBaseURLAndCreatesCatalog(t *testin
 	assertOwnerOnlyCatalogPermissions(t, catalogPath)
 }
 
-func TestProfileCreatePresetWithDefaultBaseURLAndTextOutput(t *testing.T) {
+func TestProfileCreateBearerProfileFromGenericFlagsAndTextOutput(t *testing.T) {
 	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
 
-	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "create", "mailerlite", "--preset", "mailerlite")
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath},
+		"profile", "create", "mailerlite",
+		"--service", "mailerlite",
+		"--base-url", "https://connect.mailerlite.com/api",
+		"--auth", "bearer",
+		"--credential", "api-token",
+	)
 	if result.code != 0 || result.stderr != "" {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
 	}
@@ -162,10 +173,44 @@ func TestProfileCreatePresetWithDefaultBaseURLAndTextOutput(t *testing.T) {
 	}
 }
 
+func TestProfileCreateBasicProfileFromGenericFlags(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath},
+		"profile", "create", "crisp",
+		"--service", "crisp",
+		"--base-url", "https://api.crisp.chat/v1",
+		"--auth", "basic",
+		"--username-credential", "identifier",
+		"--password-credential", "key",
+		"--json",
+	)
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	var payload struct {
+		Secrets []string `json:"secretCommands"`
+	}
+	mustJSON(t, result.stdout, &payload)
+	if got := strings.Join(payload.Secrets, "\n"); got != "api secret set crisp identifier\napi secret set crisp key" {
+		t.Fatalf("secret commands = %+v", payload.Secrets)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["crisp"]
+	if profile.Auth.Scheme != "basic" || profile.Auth.UsernameCredential != "identifier" || profile.Auth.PasswordCredential != "key" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+}
+
 func TestProfileCreateGenericInteractiveBearerProfile(t *testing.T) {
 	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
 	stdin := strings.Join([]string{
-		"custom-service",
+		"",
 		"https://api.example.test/v1",
 		"bearer",
 		"access-token",
@@ -181,7 +226,32 @@ func TestProfileCreateGenericInteractiveBearerProfile(t *testing.T) {
 		t.Fatalf("load created catalog: %v", err)
 	}
 	profile := catalog.Profiles["custom"]
-	if profile.Service != "custom-service" || profile.BaseURL != "https://api.example.test/v1" || profile.Auth.Scheme != "bearer" || profile.Auth.Credential != "access-token" {
+	if profile.Service != "custom" || profile.BaseURL != "https://api.example.test/v1" || profile.Auth.Scheme != "bearer" || profile.Auth.Credential != "access-token" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+}
+
+func TestProfileCreateGenericInteractiveQueryProfilePromptsForAuthSpecificFields(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+	stdin := strings.Join([]string{
+		"pipedrive",
+		"https://api.pipedrive.test/v1",
+		"query",
+		"api_token",
+		"api-token",
+	}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin}, "profile", "create", "pipedrive", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["pipedrive"]
+	if profile.Auth.Scheme != "query" || profile.Auth.Param != "api_token" || profile.Auth.Credential != "api-token" {
 		t.Fatalf("created profile = %+v", profile)
 	}
 }
@@ -198,11 +268,28 @@ func TestProfileCreateRejectsDuplicateProfile(t *testing.T) {
 		}
 	}`)
 
-	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "create", "mailerlite", "--preset", "mailerlite", "--json")
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath},
+		"profile", "create", "mailerlite",
+		"--service", "mailerlite",
+		"--base-url", "https://connect.mailerlite.com/api",
+		"--auth", "bearer",
+		"--credential", "api-token",
+		"--json",
+	)
 	if result.code == 0 || result.stderr != "" {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
 	}
 	assertJSONError(t, result.stdout, CodeProfileCatalogInvalid)
+}
+
+func TestProfileCreateRejectsPresetsToKeepCLIGeneric(t *testing.T) {
+	result := runCLI(t, testCLIOptions{profilesPath: filepath.Join(t.TempDir(), "profiles.json")},
+		"profile", "create", "dolibarr", "--preset", "dolibarr", "--json",
+	)
+	if result.code == 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	assertJSONError(t, result.stdout, CodeInvalidArgs)
 }
 
 func TestGlobalAndSubcommandHelpThroughCLI(t *testing.T) {

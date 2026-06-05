@@ -32,19 +32,33 @@ func TestHelpTextIsDiscoverableForHumansAndAgents(t *testing.T) {
 	}
 }
 
-func TestProfileHelpIncludesCreatePresets(t *testing.T) {
+func TestProfileHelpIncludesGenericCreateFlags(t *testing.T) {
 	text := HelpText("profile")
 	for _, want := range []string{
 		"api profile create <profile>",
-		"--preset dolibarr",
-		"mailerlite",
-		"pipedrive",
-		"pennylane",
-		"crisp",
+		"--service",
+		"--base-url",
+		"--auth bearer|header|query|basic",
+		"--credential",
+		"--username-credential",
 		"does not store credentials",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("profile help missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "preset") || strings.Contains(text, "dolibarr") || strings.Contains(text, "mailerlite") {
+		t.Fatalf("profile help should stay generic:\n%s", text)
+	}
+}
+
+func TestHelpTextAvoidsFinalServiceExamples(t *testing.T) {
+	for _, topic := range []string{"", "profile"} {
+		text := HelpText(topic)
+		for _, service := range []string{"dolibarr", "mailerlite", "pipedrive", "pennylane", "crisp"} {
+			if strings.Contains(strings.ToLower(text), service) {
+				t.Fatalf("%q help should not mention final service %q:\n%s", topic, service, text)
+			}
 		}
 	}
 }
