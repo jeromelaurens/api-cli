@@ -352,6 +352,8 @@ Required v1 tests:
 - keyring store with `go-keyring.MockInit()`
 - memory credential store for command tests
 - CLI admin commands in-process through injected dependencies
+- binary e2e against a fake HTTP server using the test-only
+  `apicli_e2e_mock_keyring` build tag, without touching the OS keyring
 - non-leak tests for stdout and stderr
 
 ## Deferred

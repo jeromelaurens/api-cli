@@ -23,7 +23,7 @@
     },
     "pennylane": {
       "service": "pennylane",
-      "baseURL": "https://api.pennylane.com/api/external/v2",
+      "baseURL": "https://app.pennylane.com/api/external/v2",
       "readOnly": false,
       "auth": {
         "scheme": "bearer",

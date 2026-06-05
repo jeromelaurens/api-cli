@@ -23,7 +23,7 @@ api profile --help
 api secret --help
 ```
 
-The Go module is intended to be:
+The Go module is:
 
 ```text
 github.com/jeromelaurens/api-cli
@@ -321,3 +321,6 @@ auth query parameters.
 - Keep endpoint knowledge in skills, not in `api`.
 - Use standard-library CLI parsing, `golang.org/x/term` for masked input, and
   `github.com/zalando/go-keyring` for OS keyring access.
+- The automated binary e2e test builds with the test-only build tag
+  `apicli_e2e_mock_keyring`; the normal binary has no runtime credential-store
+  override.
