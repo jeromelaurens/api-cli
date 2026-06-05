@@ -101,6 +101,12 @@ type profileCreateOptions struct {
 	PasswordCredential string
 }
 
+const supportedAuthSchemePromptValues = "bearer|header|query|basic"
+
+func profileCreateAuthSchemePromptLabel() string {
+	return "Auth scheme (" + supportedAuthSchemePromptValues + ")"
+}
+
 func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
 	opts, err := parseProfileCreateArgs(args)
 	if err != nil {
@@ -247,7 +253,7 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	if err != nil {
 		return Profile{}, err
 	}
-	scheme, err := c.promptRequired("Auth scheme", opts.AuthScheme)
+	scheme, err := c.promptRequired(profileCreateAuthSchemePromptLabel(), opts.AuthScheme)
 	if err != nil {
 		return Profile{}, err
 	}

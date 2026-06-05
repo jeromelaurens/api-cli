@@ -231,6 +231,15 @@ func TestProfileCreateGenericInteractiveBearerProfile(t *testing.T) {
 	}
 }
 
+func TestProfileCreateInteractiveAuthPromptListsSupportedSchemes(t *testing.T) {
+	label := profileCreateAuthSchemePromptLabel()
+	for _, scheme := range []string{"bearer", "header", "query", "basic"} {
+		if !strings.Contains(label, scheme) {
+			t.Fatalf("auth prompt label %q does not mention %q", label, scheme)
+		}
+	}
+}
+
 func TestProfileCreateGenericInteractiveQueryProfilePromptsForAuthSpecificFields(t *testing.T) {
 	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
 	stdin := strings.Join([]string{
