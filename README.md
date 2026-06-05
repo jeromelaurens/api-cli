@@ -14,6 +14,7 @@ api request <profile> <METHOD> <path> [--query "..."] [--body file|-] [--header 
 api profile path [--json]
 api profile list [--json]
 api profile show <profile> [--json]
+api profile create <profile> [--preset <name>] [--base-url <url>] [--read-only] [--json]
 api secret set <profile> <credential> [--json]
 api secret list [<profile>] [--check] [--json]
 api secret delete <profile> <credential> [--json]
@@ -63,9 +64,20 @@ Overrides:
 2. `API_PROFILES`
 3. default `~/.api/profiles.json`
 
-The CLI does not create or modify the profile catalog in v1. Create the
-directory with owner-only access and the file with owner-only read/write access
-where the operating system supports POSIX-like permissions.
+The CLI can create profiles in v1:
+
+```sh
+api profile create dolibarr --preset dolibarr
+api profile create mailerlite --preset mailerlite
+api profile create pipedrive --preset pipedrive
+api profile create pennylane --preset pennylane
+api profile create crisp --preset crisp
+```
+
+`profile create` writes non-secret profile data only. It creates the directory
+with owner-only access and the file with owner-only read/write access where the
+operating system supports POSIX-like permissions. It never stores credential
+values; use `api secret set` for that.
 
 Schema:
 
@@ -315,6 +327,27 @@ Skills parse stdout JSON and inspect `ok`, `status`, `body`, `bodyText`, or
 auth query parameters.
 
 ## Real-Service Smoke Tests
+
+Create the non-secret profiles with presets first:
+
+```sh
+api profile create dolibarr --preset dolibarr
+api profile create mailerlite --preset mailerlite
+api profile create pipedrive --preset pipedrive
+api profile create pennylane --preset pennylane
+api profile create crisp --preset crisp
+```
+
+Then store credentials in the OS keyring:
+
+```sh
+api secret set dolibarr api-key
+api secret set mailerlite api-token
+api secret set pipedrive api-token
+api secret set pennylane access-token
+api secret set crisp identifier
+api secret set crisp key
+```
 
 After local profiles and keyring credentials have been configured, use the
 helper script to run read-only smoke tests without printing response bodies:

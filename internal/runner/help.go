@@ -22,6 +22,7 @@ Commands:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
+  api profile create <profile> [--preset name] [--base-url url] [--read-only] [--json]
   api secret set <profile> <credential> [--json]
   api secret list [<profile>] [--check] [--json]
   api secret delete <profile> <credential> [--json]
@@ -42,6 +43,7 @@ Auth schemes:
 Examples:
   api request dolibarr GET /thirdparties --query "limit=10"
   api profile list --json
+  api profile create mailerlite --preset mailerlite
   api secret set crisp identifier
 `
 
@@ -68,11 +70,23 @@ const profileHelp = `Usage:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
+  api profile create <profile> [--preset dolibarr|mailerlite|pipedrive|pennylane|crisp|sentry] [--base-url url] [--read-only] [--json]
 
 Profile catalog:
   Default path: ~/.api/profiles.json
   Override priority: --profiles, API_PROFILES, default path
-  The CLI does not create or edit profiles in v1.
+  profile create writes non-secret profile data only. It does not store credentials.
+
+Presets:
+  --preset dolibarr prompts for the instance base URL and uses DOLAPIKEY with credential api-key.
+  --preset mailerlite uses https://connect.mailerlite.com/api and credential api-token.
+  --preset pipedrive uses https://api.pipedrive.com/v1 and query credential api-token.
+  --preset pennylane uses https://app.pennylane.com/api/external/v2 and credential access-token.
+  --preset crisp uses https://api.crisp.chat/v1 and credentials identifier and key.
+
+Examples:
+  api profile create dolibarr --preset dolibarr
+  api profile create mailerlite --preset mailerlite
 `
 
 const secretHelp = `Usage:

@@ -62,7 +62,7 @@ Override priority:
 2. `API_PROFILES`
 3. default path
 
-The CLI does not create or modify the profile catalog in v1.
+The CLI can create profiles in v1. It does not edit or delete profiles.
 
 Schema:
 
@@ -270,6 +270,38 @@ Default output is human-readable text; `--json` emits:
 profile is missing. By default that error is text on stderr; with `--json`, it
 is JSON on stdout.
 
+`api profile create <profile>` creates the profile catalog if missing and writes
+non-secret profile data only. It creates the catalog directory with owner-only
+permissions where the operating system supports them, writes the catalog file as
+owner-only read/write, and rejects duplicate profiles.
+
+Profile create supports known service presets:
+
+```text
+api profile create dolibarr --preset dolibarr
+api profile create mailerlite --preset mailerlite
+api profile create pipedrive --preset pipedrive
+api profile create pennylane --preset pennylane
+api profile create crisp --preset crisp
+```
+
+Preset defaults:
+
+- `dolibarr`: prompts for the instance base URL, uses header auth
+  `DOLAPIKEY` and credential `api-key`.
+- `mailerlite`: uses `https://connect.mailerlite.com/api`, bearer auth, and
+  credential `api-token`.
+- `pipedrive`: uses `https://api.pipedrive.com/v1`, query auth parameter
+  `api_token`, and credential `api-token`.
+- `pennylane`: uses `https://app.pennylane.com/api/external/v2`, bearer auth,
+  and credential `access-token`.
+- `crisp`: uses `https://api.crisp.chat/v1`, basic auth, and credentials
+  `identifier` and `key`.
+
+If no preset is supplied, `profile create` prompts for the non-secret profile
+fields: service name, base URL, auth scheme, and credential names. It never
+prompts for credential values.
+
 `api secret list [<profile>]` requires the catalog. Without `--check`, it does
 not read the keyring. With `--check`, it adds `present` in `--json` mode or a
 human-readable presence marker in default text mode.
@@ -339,6 +371,7 @@ Required v1 tests:
 
 - global and subcommand help output
 - default human-readable admin output and admin `--json` output
+- interactive and preset profile creation
 - profile catalog parsing and validation
 - default and override profile catalog path resolution
 - path and query rejection
@@ -364,6 +397,6 @@ Required v1 tests:
 - endpoint allowlists
 - generic dry-run
 - `secret get`
-- profile create/edit/delete commands
+- profile edit/delete commands
 - public override of the credential store
 - response body truncation

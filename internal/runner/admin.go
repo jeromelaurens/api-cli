@@ -81,9 +81,293 @@ func (c *CLI) runProfile(args []string) int {
 		}
 		fmt.Fprintf(c.Out, "Profile: %s\nService: %s\nBase URL: %s\nRead only: %t\nAuth scheme: %s\n", args[1], profile.Service, profile.BaseURL, profile.ReadOnly, profile.Auth.Scheme)
 		return 0
+	case "create":
+		return c.runProfileCreate(args[1:], jsonMode)
 	default:
 		return c.writeAdminError(codedError(CodeInvalidArgs, "unknown profile subcommand: %s", args[0]), jsonMode)
 	}
+}
+
+type profileCreateOptions struct {
+	Name     string
+	Preset   string
+	BaseURL  string
+	ReadOnly bool
+}
+
+func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
+	opts, err := parseProfileCreateArgs(args)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+
+	profile, err := c.buildProfileFromCreateOptions(opts)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+	catalog, _, err := LoadCatalogOrEmpty(c.ProfilesPath)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+	if _, exists := catalog.Profiles[opts.Name]; exists {
+		return c.writeAdminError(codedError(CodeProfileCatalogInvalid, "profile %s already exists", opts.Name), jsonMode)
+	}
+	catalog.Profiles[opts.Name] = profile
+	if err := SaveCatalog(c.ProfilesPath, *catalog); err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+
+	commands := secretCommandsForProfile(opts.Name, profile)
+	if jsonMode {
+		return c.writeAdminJSON(map[string]any{
+			"profile":        opts.Name,
+			"path":           c.ProfilesPath,
+			"created":        true,
+			"secretCommands": commands,
+		})
+	}
+	fmt.Fprintf(c.Out, "Created profile %s in %s\n", opts.Name, c.ProfilesPath)
+	if len(commands) > 0 {
+		fmt.Fprintln(c.Out, "Next credential commands:")
+		for _, command := range commands {
+			fmt.Fprintf(c.Out, "  %s\n", command)
+		}
+	}
+	return 0
+}
+
+func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
+	var opts profileCreateOptions
+	positionals := make([]string, 0, 1)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--preset":
+			value, next, err := requireFlagValue(args, i, "--preset")
+			if err != nil {
+				return opts, err
+			}
+			opts.Preset = value
+			i = next
+		case strings.HasPrefix(arg, "--preset="):
+			opts.Preset = strings.TrimPrefix(arg, "--preset=")
+		case arg == "--base-url":
+			value, next, err := requireFlagValue(args, i, "--base-url")
+			if err != nil {
+				return opts, err
+			}
+			opts.BaseURL = value
+			i = next
+		case strings.HasPrefix(arg, "--base-url="):
+			opts.BaseURL = strings.TrimPrefix(arg, "--base-url=")
+		case arg == "--read-only":
+			opts.ReadOnly = true
+		case strings.HasPrefix(arg, "-"):
+			return opts, codedError(CodeInvalidArgs, "unknown profile create flag: %s", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+	if len(positionals) != 1 {
+		return opts, codedError(CodeInvalidArgs, "usage: api profile create <profile>")
+	}
+	if !validName(positionals[0]) {
+		return opts, codedError(CodeProfileCatalogInvalid, "profile name %q must match [a-zA-Z0-9._-]+", positionals[0])
+	}
+	opts.Name = positionals[0]
+	return opts, nil
+}
+
+func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile, error) {
+	if opts.Preset != "" {
+		return c.buildPresetProfile(opts)
+	}
+
+	service, err := c.promptRequired("Service", "")
+	if err != nil {
+		return Profile{}, err
+	}
+	baseURL, err := c.promptRequired("Base URL", opts.BaseURL)
+	if err != nil {
+		return Profile{}, err
+	}
+	scheme, err := c.promptRequired("Auth scheme", "")
+	if err != nil {
+		return Profile{}, err
+	}
+	auth, err := c.promptAuthConfig(strings.ToLower(scheme))
+	if err != nil {
+		return Profile{}, err
+	}
+	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: opts.ReadOnly, Auth: auth}
+	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{opts.Name: profile}}); err != nil {
+		return Profile{}, err
+	}
+	return profile, nil
+}
+
+func (c *CLI) buildPresetProfile(opts profileCreateOptions) (Profile, error) {
+	preset, ok := profilePresets()[strings.ToLower(opts.Preset)]
+	if !ok {
+		return Profile{}, codedError(CodeInvalidArgs, "unknown profile preset: %s", opts.Preset)
+	}
+	baseURL := opts.BaseURL
+	if baseURL == "" {
+		baseURL = preset.BaseURL
+	}
+	if baseURL == "" {
+		var err error
+		baseURL, err = c.promptRequired("Base URL", "")
+		if err != nil {
+			return Profile{}, err
+		}
+	}
+	profile := Profile{
+		Service:  preset.Service,
+		BaseURL:  baseURL,
+		ReadOnly: opts.ReadOnly,
+		Auth:     preset.Auth,
+	}
+	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{opts.Name: profile}}); err != nil {
+		return Profile{}, err
+	}
+	return profile, nil
+}
+
+type profilePreset struct {
+	Service string
+	BaseURL string
+	Auth    AuthConfig
+}
+
+func profilePresets() map[string]profilePreset {
+	return map[string]profilePreset{
+		"dolibarr": {
+			Service: "dolibarr",
+			Auth:    AuthConfig{Scheme: "header", Header: "DOLAPIKEY", Credential: "api-key"},
+		},
+		"mailerlite": {
+			Service: "mailerlite",
+			BaseURL: "https://connect.mailerlite.com/api",
+			Auth:    AuthConfig{Scheme: "bearer", Credential: "api-token"},
+		},
+		"pipedrive": {
+			Service: "pipedrive",
+			BaseURL: "https://api.pipedrive.com/v1",
+			Auth:    AuthConfig{Scheme: "query", Param: "api_token", Credential: "api-token"},
+		},
+		"pennylane": {
+			Service: "pennylane",
+			BaseURL: "https://app.pennylane.com/api/external/v2",
+			Auth:    AuthConfig{Scheme: "bearer", Credential: "access-token"},
+		},
+		"crisp": {
+			Service: "crisp",
+			BaseURL: "https://api.crisp.chat/v1",
+			Auth:    AuthConfig{Scheme: "basic", UsernameCredential: "identifier", PasswordCredential: "key"},
+		},
+		"sentry": {
+			Service: "sentry",
+			BaseURL: "https://sentry.io/api/0",
+			Auth:    AuthConfig{Scheme: "bearer", Credential: "auth-token"},
+		},
+	}
+}
+
+func (c *CLI) promptAuthConfig(scheme string) (AuthConfig, error) {
+	switch scheme {
+	case "bearer":
+		credential, err := c.promptRequired("Credential name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		return AuthConfig{Scheme: "bearer", Credential: credential}, nil
+	case "header":
+		header, err := c.promptRequired("Header name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		credential, err := c.promptRequired("Credential name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		return AuthConfig{Scheme: "header", Header: header, Credential: credential}, nil
+	case "query":
+		param, err := c.promptRequired("Query parameter", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		credential, err := c.promptRequired("Credential name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		return AuthConfig{Scheme: "query", Param: param, Credential: credential}, nil
+	case "basic":
+		username, err := c.promptRequired("Username credential name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		password, err := c.promptRequired("Password credential name", "")
+		if err != nil {
+			return AuthConfig{}, err
+		}
+		return AuthConfig{Scheme: "basic", UsernameCredential: username, PasswordCredential: password}, nil
+	default:
+		return AuthConfig{}, codedError(CodeProfileCatalogInvalid, "auth.scheme is not supported: %s", scheme)
+	}
+}
+
+func (c *CLI) promptRequired(label string, defaultValue string) (string, error) {
+	value, err := c.readPromptLine(label, defaultValue)
+	if err != nil {
+		return "", err
+	}
+	if value == "" {
+		return "", codedError(CodeInvalidArgs, "%s is required", label)
+	}
+	return value, nil
+}
+
+func (c *CLI) readPromptLine(label string, defaultValue string) (string, error) {
+	if file, ok := c.In.(*os.File); ok && term.IsTerminal(int(file.Fd())) {
+		if defaultValue == "" {
+			fmt.Fprintf(c.Err, "%s: ", label)
+		} else {
+			fmt.Fprintf(c.Err, "%s [%s]: ", label, defaultValue)
+		}
+	}
+
+	var builder strings.Builder
+	buffer := make([]byte, 1)
+	for {
+		n, err := c.In.Read(buffer)
+		if n > 0 {
+			if buffer[0] == '\n' {
+				break
+			}
+			builder.WriteByte(buffer[0])
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", wrapError(CodeInvalidArgs, err, "cannot read %s", label)
+		}
+	}
+	value := strings.TrimSpace(builder.String())
+	if value == "" {
+		value = defaultValue
+	}
+	return value, nil
+}
+
+func secretCommandsForProfile(profileName string, profile Profile) []string {
+	credentials := sortedCredentials(profile)
+	commands := make([]string, 0, len(credentials))
+	for _, credential := range credentials {
+		commands = append(commands, fmt.Sprintf("api secret set %s %s", profileName, credential))
+	}
+	return commands
 }
 
 func (c *CLI) runSecret(args []string) int {

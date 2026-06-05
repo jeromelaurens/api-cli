@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,6 +105,106 @@ func TestProfileShowJSONAndTextErrorPolicy(t *testing.T) {
 	assertJSONError(t, missingJSON.stdout, CodeProfileNotFound)
 }
 
+func TestProfileCreateDolibarrPresetPromptsForBaseURLAndCreatesCatalog(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+
+	result := runCLI(t, testCLIOptions{
+		profilesPath: catalogPath,
+		stdin:        "https://dolibarr.example.test/api/index.php\n",
+	}, "profile", "create", "dolibarr", "--preset", "dolibarr", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	var payload struct {
+		Profile string   `json:"profile"`
+		Path    string   `json:"path"`
+		Created bool     `json:"created"`
+		Secrets []string `json:"secretCommands"`
+	}
+	mustJSON(t, result.stdout, &payload)
+	if payload.Profile != "dolibarr" || payload.Path != catalogPath || !payload.Created {
+		t.Fatalf("create payload = %+v", payload)
+	}
+	if len(payload.Secrets) != 1 || payload.Secrets[0] != "api secret set dolibarr api-key" {
+		t.Fatalf("secret commands = %+v", payload.Secrets)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["dolibarr"]
+	if profile.Service != "dolibarr" || profile.BaseURL != "https://dolibarr.example.test/api/index.php" || profile.Auth.Scheme != "header" || profile.Auth.Header != "DOLAPIKEY" || profile.Auth.Credential != "api-key" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+	assertOwnerOnlyCatalogPermissions(t, catalogPath)
+}
+
+func TestProfileCreatePresetWithDefaultBaseURLAndTextOutput(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "create", "mailerlite", "--preset", "mailerlite")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	if !strings.Contains(result.stdout, "Created profile mailerlite") || !strings.Contains(result.stdout, "api secret set mailerlite api-token") {
+		t.Fatalf("text output = %q", result.stdout)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["mailerlite"]
+	if profile.BaseURL != "https://connect.mailerlite.com/api" || profile.Auth.Scheme != "bearer" || profile.Auth.Credential != "api-token" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+}
+
+func TestProfileCreateGenericInteractiveBearerProfile(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+	stdin := strings.Join([]string{
+		"custom-service",
+		"https://api.example.test/v1",
+		"bearer",
+		"access-token",
+	}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin}, "profile", "create", "custom", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["custom"]
+	if profile.Service != "custom-service" || profile.BaseURL != "https://api.example.test/v1" || profile.Auth.Scheme != "bearer" || profile.Auth.Credential != "access-token" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+}
+
+func TestProfileCreateRejectsDuplicateProfile(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"mailerlite": {
+				"service": "mailerlite",
+				"baseURL": "https://connect.mailerlite.example.test/api",
+				"auth": {"scheme": "bearer", "credential": "api-token"}
+			}
+		}
+	}`)
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath}, "profile", "create", "mailerlite", "--preset", "mailerlite", "--json")
+	if result.code == 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	assertJSONError(t, result.stdout, CodeProfileCatalogInvalid)
+}
+
 func TestGlobalAndSubcommandHelpThroughCLI(t *testing.T) {
 	tests := []struct {
 		args []string
@@ -120,6 +221,24 @@ func TestGlobalAndSubcommandHelpThroughCLI(t *testing.T) {
 		if result.code != 0 || result.stderr != "" || !strings.Contains(result.stdout, "Usage:") || !strings.Contains(result.stdout, tt.want) {
 			t.Fatalf("args=%v want=%q exit=%d stdout=%q stderr=%q", tt.args, tt.want, result.code, result.stdout, result.stderr)
 		}
+	}
+}
+
+func assertOwnerOnlyCatalogPermissions(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat catalog: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("catalog mode = %o, want 600", got)
+	}
+	dirInfo, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("stat catalog dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("catalog dir mode = %o, want 700", got)
 	}
 }
 

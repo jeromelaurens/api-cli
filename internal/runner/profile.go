@@ -75,6 +75,62 @@ func LoadCatalog(path string) (*Catalog, error) {
 	return &catalog, nil
 }
 
+func LoadCatalogOrEmpty(path string) (*Catalog, bool, error) {
+	catalog, err := LoadCatalog(path)
+	if err == nil {
+		return catalog, true, nil
+	}
+	if codeOf(err) == CodeProfileCatalogMissing {
+		return &Catalog{SchemaVersion: 1, Profiles: map[string]Profile{}}, false, nil
+	}
+	return nil, false, err
+}
+
+func SaveCatalog(path string, catalog Catalog) error {
+	if err := ValidateCatalog(catalog); err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot create profile catalog directory %s", dir)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot set profile catalog directory permissions %s", dir)
+	}
+	data, err := json.MarshalIndent(catalog, "", "  ")
+	if err != nil {
+		return wrapError(CodeInternalError, err, "cannot encode profile catalog")
+	}
+	data = append(data, '\n')
+
+	tmp, err := os.CreateTemp(dir, ".profiles-*.json")
+	if err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot create temporary profile catalog")
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot set temporary profile catalog permissions")
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot write temporary profile catalog")
+	}
+	if err := tmp.Close(); err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot close temporary profile catalog")
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot replace profile catalog at %s", path)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return wrapError(CodeProfileCatalogInvalid, err, "cannot set profile catalog permissions %s", path)
+	}
+	return nil
+}
+
 func ValidateCatalog(catalog Catalog) error {
 	if catalog.SchemaVersion != 1 {
 		return codedError(CodeProfileCatalogInvalid, "profile catalog schemaVersion must be 1")

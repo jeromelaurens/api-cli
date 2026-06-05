@@ -31,3 +31,20 @@ func TestHelpTextIsDiscoverableForHumansAndAgents(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileHelpIncludesCreatePresets(t *testing.T) {
+	text := HelpText("profile")
+	for _, want := range []string{
+		"api profile create <profile>",
+		"--preset dolibarr",
+		"mailerlite",
+		"pipedrive",
+		"pennylane",
+		"crisp",
+		"does not store credentials",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("profile help missing %q:\n%s", want, text)
+		}
+	}
+}
