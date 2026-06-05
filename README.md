@@ -339,6 +339,10 @@ Skills parse stdout JSON and inspect `ok`, `status`, `body`, `bodyText`, or
 `bodyBase64`. Skills must not pass credentials, absolute URLs, auth headers, or
 auth query parameters.
 
+For OpenClaw specifically — where the shared usage contract lives in `TOOLS.md`,
+how to migrate a `SKILL.md` from `curl`, and the per-skill profile mapping — see
+[docs/agents/openclaw-skills.md](docs/agents/openclaw-skills.md).
+
 ## Real-Service Smoke Tests
 
 Create the non-secret profiles first. The helper keeps the CLI generic; it only
