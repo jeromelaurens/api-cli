@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "dolibarr": {
+      "service": "dolibarr",
+      "baseURL": "https://dolibarr.example.com/api/index.php",
+      "readOnly": false,
+      "auth": {
+        "scheme": "header",
+        "header": "DOLAPIKEY",
+        "credential": "api-key"
+      }
+    },
+    "dolibarr-readonly": {
+      "service": "dolibarr",
+      "baseURL": "https://dolibarr.example.com/api/index.php",
+      "readOnly": true,
+      "auth": {
+        "scheme": "header",
+        "header": "DOLAPIKEY",
+        "credential": "api-key"
+      }
+    },
+    "pennylane": {
+      "service": "pennylane",
+      "baseURL": "https://api.pennylane.com/api/external/v2",
+      "readOnly": false,
+      "auth": {
+        "scheme": "bearer",
+        "credential": "access-token"
+      }
+    },
+    "pipedrive": {
+      "service": "pipedrive",
+      "baseURL": "https://api.pipedrive.com/v1",
+      "readOnly": false,
+      "auth": {
+        "scheme": "query",
+        "param": "api_token",
+        "credential": "api-token"
+      }
+    },
+    "crisp": {
+      "service": "crisp",
+      "baseURL": "https://api.crisp.chat/v1",
+      "readOnly": false,
+      "auth": {
+        "scheme": "basic",
+        "usernameCredential": "identifier",
+        "passwordCredential": "key"
+      }
+    },
+    "mailerlite": {
+      "service": "mailerlite",
+      "baseURL": "https://connect.mailerlite.com/api",
+      "readOnly": false,
+      "auth": {
+        "scheme": "bearer",
+        "credential": "api-token"
+      }
+    },
+    "sentry": {
+      "service": "sentry",
+      "baseURL": "https://sentry.io/api/0",
+      "readOnly": false,
+      "auth": {
+        "scheme": "bearer",
+        "credential": "auth-token"
+      }
+    }
+  }
+}
