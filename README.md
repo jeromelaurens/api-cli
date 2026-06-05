@@ -329,7 +329,14 @@ auth query parameters.
 
 ## Real-Service Smoke Tests
 
-Create the non-secret profiles first:
+Create the non-secret profiles first. The helper keeps the CLI generic; it only
+expands to explicit `api profile create` commands:
+
+```sh
+DOLIBARR_BASE_URL="https://TON-DOLIBARR/api/index.php" scripts/configure-real-profiles.sh
+```
+
+Equivalent manual commands:
 
 ```sh
 api profile create dolibarr \
