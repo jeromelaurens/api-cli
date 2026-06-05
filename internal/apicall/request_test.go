@@ -9,6 +9,13 @@ func TestBuildTargetRejectsAbsoluteURL(t *testing.T) {
 	}
 }
 
+func TestBuildTargetRejectsQueryInRequestPath(t *testing.T) {
+	_, err := BuildTarget("https://example.test/api", "/invoices?status=unpaid", "")
+	if err == nil {
+		t.Fatal("expected query in request path to be rejected")
+	}
+}
+
 func TestBuildTargetPreservesRawQuery(t *testing.T) {
 	target, err := BuildTarget("https://example.test/api", "/invoices", "status=unpaid&filter=a%2Fb")
 	if err != nil {

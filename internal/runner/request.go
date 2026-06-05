@@ -270,6 +270,9 @@ func validateRequestPath(requestPath string) error {
 	if strings.Contains(requestPath, "://") || strings.HasPrefix(requestPath, "//") {
 		return codedError(CodeInvalidRequestPath, "absolute URLs are not allowed")
 	}
+	if strings.Contains(requestPath, "?") {
+		return codedError(CodeInvalidRequestPath, "path must not contain ?; use --query for query parameters")
+	}
 	if !strings.HasPrefix(requestPath, "/") {
 		return codedError(CodeInvalidRequestPath, "path must start with /")
 	}

@@ -143,8 +143,8 @@ GET POST PUT PATCH DELETE HEAD OPTIONS
 
 Methods are normalized to uppercase. Other methods are rejected.
 
-The path must be non-empty and start with `/`. Absolute URLs and network-path
-references are rejected.
+The path must be non-empty, start with `/`, and not contain `?`. Absolute URLs
+and network-path references are rejected.
 
 `--query` is passed as a raw query string and must not start with `?`. It is not
 otherwise normalized, except for auth query collision checks.

@@ -14,6 +14,9 @@ func BuildTarget(baseURL string, requestPath string, rawQuery string) (*url.URL,
 	if strings.Contains(requestPath, "://") || strings.HasPrefix(requestPath, "//") {
 		return nil, errors.New("absolute URLs are not allowed")
 	}
+	if strings.Contains(requestPath, "?") {
+		return nil, errors.New("path must not contain ?; use rawQuery")
+	}
 	if !strings.HasPrefix(requestPath, "/") {
 		return nil, errors.New("path must be relative and start with /")
 	}

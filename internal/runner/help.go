@@ -55,7 +55,7 @@ Methods:
   GET POST PUT PATCH DELETE HEAD OPTIONS
 
 Request policy:
-  The path must start with / and absolute URLs are rejected.
+  The path must start with /, must not contain ?, and absolute URLs are rejected.
   --query is a raw query string without a leading ?.
   --body reads a file or stdin when the value is -.
   JSON bodies infer Content-Type: application/json when no Content-Type is provided.

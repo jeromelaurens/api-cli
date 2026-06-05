@@ -141,8 +141,9 @@ Allowed methods:
 GET POST PUT PATCH DELETE HEAD OPTIONS
 ```
 
-The path must be non-empty and start with `/`. Absolute URLs such as
-`https://...` and network-path references such as `//host/path` are rejected.
+The path must be non-empty, start with `/`, and not contain `?`. Absolute URLs
+such as `https://...` and network-path references such as `//host/path` are
+rejected.
 
 `--query` is a raw query string without a leading `?`. A leading `?` is rejected
 instead of silently rewritten.

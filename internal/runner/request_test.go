@@ -119,6 +119,7 @@ func TestRequestRejectsUnsafeInputsBeforeHTTPCall(t *testing.T) {
 		{"absolute URL", []string{"request", "dolibarr", "GET", "https://evil.test/path"}, CodeInvalidRequestPath},
 		{"network path", []string{"request", "dolibarr", "GET", "//evil.test/path"}, CodeInvalidRequestPath},
 		{"missing slash", []string{"request", "dolibarr", "GET", "thirdparties"}, CodeInvalidRequestPath},
+		{"query in path", []string{"request", "dolibarr", "GET", "/invoices?status=unpaid"}, CodeInvalidRequestPath},
 		{"leading query mark", []string{"request", "dolibarr", "GET", "/thirdparties", "--query", "?limit=10"}, CodeInvalidQuery},
 		{"forbidden authorization", []string{"request", "dolibarr", "GET", "/thirdparties", "--header", "Authorization=Bearer x"}, CodeForbiddenHeader},
 		{"forbidden cookie", []string{"request", "dolibarr", "GET", "/thirdparties", "--header", "Cookie=a=b"}, CodeForbiddenHeader},
