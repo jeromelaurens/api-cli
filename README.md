@@ -314,6 +314,22 @@ Skills parse stdout JSON and inspect `ok`, `status`, `body`, `bodyText`, or
 `bodyBase64`. Skills must not pass credentials, absolute URLs, auth headers, or
 auth query parameters.
 
+## Real-Service Smoke Tests
+
+After local profiles and keyring credentials have been configured, use the
+helper script to run read-only smoke tests without printing response bodies:
+
+```sh
+DOLIBARR_SMOKE_PATH=/safe/read/path \
+CRISP_SMOKE_PATH=/website/<website_id> \
+CRISP_TIER=website \
+scripts/smoke-real.sh
+```
+
+The script reports the command shape, exit code, HTTP status, `ok`, body type,
+stderr state, and leak-check status for Dolibarr, MailerLite, Pipedrive,
+Pennylane, and Crisp. It never accepts credential values.
+
 ## Implementation Notes
 
 - Use `cmd/api` for the command.
