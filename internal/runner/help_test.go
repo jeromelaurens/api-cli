@@ -36,6 +36,7 @@ func TestProfileHelpIncludesGenericCreateFlags(t *testing.T) {
 	text := HelpText("profile")
 	for _, want := range []string{
 		"api profile create <profile>",
+		"api profile update <profile>",
 		"--service",
 		"--base-url",
 		"--auth bearer|header|query|basic",

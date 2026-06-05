@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -83,6 +84,8 @@ func (c *CLI) runProfile(args []string) int {
 		return 0
 	case "create":
 		return c.runProfileCreate(args[1:], jsonMode)
+	case "update", "modify":
+		return c.runProfileUpdate(args[1:], jsonMode)
 	default:
 		return c.writeAdminError(codedError(CodeInvalidArgs, "unknown profile subcommand: %s", args[0]), jsonMode)
 	}
@@ -141,6 +144,49 @@ func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
 	fmt.Fprintf(c.Out, "Created profile %s in %s\n", opts.Name, c.ProfilesPath)
 	if len(commands) > 0 {
 		fmt.Fprintln(c.Out, "Next credential commands:")
+		for _, command := range commands {
+			fmt.Fprintf(c.Out, "  %s\n", command)
+		}
+	}
+	return 0
+}
+
+func (c *CLI) runProfileUpdate(args []string, jsonMode bool) int {
+	if len(args) != 1 {
+		return c.writeAdminError(codedError(CodeInvalidArgs, "usage: api profile update <profile>"), jsonMode)
+	}
+	catalog, err := LoadCatalog(c.ProfilesPath)
+	if err != nil {
+		if codeOf(err) == CodeProfileCatalogMissing {
+			err = codedError(CodeProfileNotFound, "profile %s not found", args[0])
+		}
+		return c.writeAdminError(err, jsonMode)
+	}
+	existing, err := lookupProfile(catalog, args[0])
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+	profile, err := c.buildProfileUpdate(args[0], existing)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+	catalog.Profiles[args[0]] = profile
+	if err := SaveCatalog(c.ProfilesPath, *catalog); err != nil {
+		return c.writeAdminError(err, jsonMode)
+	}
+
+	commands := secretCommandsForProfile(args[0], profile)
+	if jsonMode {
+		return c.writeAdminJSON(map[string]any{
+			"profile":        args[0],
+			"path":           c.ProfilesPath,
+			"updated":        true,
+			"secretCommands": commands,
+		})
+	}
+	fmt.Fprintf(c.Out, "Updated profile %s in %s\n", args[0], c.ProfilesPath)
+	if len(commands) > 0 {
+		fmt.Fprintln(c.Out, "Current credential commands:")
 		for _, command := range commands {
 			fmt.Fprintf(c.Out, "  %s\n", command)
 		}
@@ -268,6 +314,53 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	return profile, nil
 }
 
+func (c *CLI) buildProfileUpdate(profileName string, existing Profile) (Profile, error) {
+	service, err := c.promptRequired("Service", existing.Service)
+	if err != nil {
+		return Profile{}, err
+	}
+	baseURL, err := c.promptRequired("Base URL", existing.BaseURL)
+	if err != nil {
+		return Profile{}, err
+	}
+	readOnly, err := c.promptBool("Read only", existing.ReadOnly)
+	if err != nil {
+		return Profile{}, err
+	}
+	scheme, err := c.promptRequired(profileCreateAuthSchemePromptLabel(), existing.Auth.Scheme)
+	if err != nil {
+		return Profile{}, err
+	}
+	scheme = strings.ToLower(scheme)
+	auth, err := c.promptAuthConfig(scheme, profileUpdateAuthDefaults(existing.Auth, scheme))
+	if err != nil {
+		return Profile{}, err
+	}
+	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: readOnly, Auth: auth}
+	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{profileName: profile}}); err != nil {
+		return Profile{}, err
+	}
+	return profile, nil
+}
+
+func profileUpdateAuthDefaults(auth AuthConfig, scheme string) profileCreateOptions {
+	if auth.Scheme != scheme {
+		return profileCreateOptions{}
+	}
+	switch scheme {
+	case "bearer":
+		return profileCreateOptions{Credential: auth.Credential}
+	case "header":
+		return profileCreateOptions{Header: auth.Header, Credential: auth.Credential}
+	case "query":
+		return profileCreateOptions{Param: auth.Param, Credential: auth.Credential}
+	case "basic":
+		return profileCreateOptions{UsernameCredential: auth.UsernameCredential, PasswordCredential: auth.PasswordCredential}
+	default:
+		return profileCreateOptions{}
+	}
+}
+
 func (c *CLI) promptAuthConfig(scheme string, opts profileCreateOptions) (AuthConfig, error) {
 	switch scheme {
 	case "bearer":
@@ -362,6 +455,18 @@ func (c *CLI) readPromptLine(label string, defaultValue string) (string, error) 
 		value = defaultValue
 	}
 	return value, nil
+}
+
+func (c *CLI) promptBool(label string, defaultValue bool) (bool, error) {
+	value, err := c.promptRequired(label, strconv.FormatBool(defaultValue))
+	if err != nil {
+		return false, err
+	}
+	parsed, err := strconv.ParseBool(strings.ToLower(value))
+	if err != nil {
+		return false, codedError(CodeInvalidArgs, "%s must be true or false", label)
+	}
+	return parsed, nil
 }
 
 func secretCommandsForProfile(profileName string, profile Profile) []string {

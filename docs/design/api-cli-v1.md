@@ -296,6 +296,14 @@ Auth-specific flags:
 Missing non-secret fields are prompted interactively. The service name defaults
 to the profile name. `profile create` never prompts for credential values.
 
+`api profile update <profile>` updates an existing profile's non-secret fields
+interactively. It presents each current value in brackets and keeps that value
+when the user presses Enter. It never prompts for credential values. If the auth
+scheme or credential names change, it reports the current `api secret set`
+commands needed for the updated profile. `api profile modify <profile>` is
+accepted as an alias, but `update` is the canonical command name used in help
+and documentation.
+
 `api secret list [<profile>]` requires the catalog. Without `--check`, it does
 not read the keyring. With `--check`, it adds `present` in `--json` mode or a
 human-readable presence marker in default text mode.

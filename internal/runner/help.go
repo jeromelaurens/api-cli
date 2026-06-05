@@ -23,6 +23,7 @@ Commands:
   api profile list [--json]
   api profile show <profile> [--json]
   api profile create <profile> [--service name] [--base-url url] [--auth scheme] [auth flags] [--read-only] [--json]
+  api profile update <profile> [--json]
   api secret set <profile> <credential> [--json]
   api secret list [<profile>] [--check] [--json]
   api secret delete <profile> <credential> [--json]
@@ -71,11 +72,13 @@ const profileHelp = `Usage:
   api profile list [--json]
   api profile show <profile> [--json]
   api profile create <profile> [--service name] [--base-url url] [--auth bearer|header|query|basic] [--read-only] [--json]
+  api profile update <profile> [--json]
 
 Profile catalog:
   Default path: ~/.api/profiles.json
   Override priority: --profiles, API_PROFILES, default path
   profile create writes non-secret profile data only. It does not store credentials.
+  profile update modifies non-secret profile data only. It does not store credentials.
 
 Auth flags:
   bearer: --credential name
@@ -85,9 +88,11 @@ Auth flags:
 
 Interactive mode:
   Missing non-secret fields are prompted. The service name defaults to the profile name.
+  profile update shows current values in brackets. Press Enter to keep them.
 
 Examples:
   api profile create billing --service billing --base-url "https://api.example.test/v1" --auth header --header X-API-Key --credential api-key
+  api profile update billing
   api profile create support --service support --base-url "https://support.example.test/v1" --auth basic --username-credential identifier --password-credential key
 `
 

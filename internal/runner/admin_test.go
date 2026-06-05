@@ -265,6 +265,121 @@ func TestProfileCreateGenericInteractiveQueryProfilePromptsForAuthSpecificFields
 	}
 }
 
+func TestProfileUpdateInteractiveEnterKeepsExistingValues(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"support": {
+				"service": "support",
+				"baseURL": "https://support.example.test/v1",
+				"readOnly": true,
+				"auth": {"scheme": "header", "header": "X-API-Key", "credential": "api-key"}
+			}
+		}
+	}`)
+	stdin := strings.Join([]string{"", "", "", "", "", ""}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin}, "profile", "update", "support", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	var payload struct {
+		Profile string   `json:"profile"`
+		Updated bool     `json:"updated"`
+		Secrets []string `json:"secretCommands"`
+	}
+	mustJSON(t, result.stdout, &payload)
+	if payload.Profile != "support" || !payload.Updated {
+		t.Fatalf("update payload = %+v", payload)
+	}
+	if got := strings.Join(payload.Secrets, "\n"); got != "api secret set support api-key" {
+		t.Fatalf("secret commands = %+v", payload.Secrets)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load updated catalog: %v", err)
+	}
+	profile := catalog.Profiles["support"]
+	if profile.Service != "support" || profile.BaseURL != "https://support.example.test/v1" || !profile.ReadOnly || profile.Auth.Scheme != "header" || profile.Auth.Header != "X-API-Key" || profile.Auth.Credential != "api-key" {
+		t.Fatalf("updated profile = %+v", profile)
+	}
+}
+
+func TestProfileUpdateInteractiveCanChangeProfileAndAuthScheme(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"support": {
+				"service": "support",
+				"baseURL": "https://support.example.test/v1",
+				"readOnly": true,
+				"auth": {"scheme": "header", "header": "X-API-Key", "credential": "api-key"}
+			}
+		}
+	}`)
+	stdin := strings.Join([]string{
+		"support-v2",
+		"https://support.example.test/v2",
+		"false",
+		"basic",
+		"identifier",
+		"key",
+	}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin}, "profile", "update", "support", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	var payload struct {
+		Secrets []string `json:"secretCommands"`
+	}
+	mustJSON(t, result.stdout, &payload)
+	if got := strings.Join(payload.Secrets, "\n"); got != "api secret set support identifier\napi secret set support key" {
+		t.Fatalf("secret commands = %+v", payload.Secrets)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load updated catalog: %v", err)
+	}
+	profile := catalog.Profiles["support"]
+	if profile.Service != "support-v2" || profile.BaseURL != "https://support.example.test/v2" || profile.ReadOnly {
+		t.Fatalf("updated non-auth profile fields = %+v", profile)
+	}
+	if profile.Auth.Scheme != "basic" || profile.Auth.UsernameCredential != "identifier" || profile.Auth.PasswordCredential != "key" {
+		t.Fatalf("updated auth = %+v", profile.Auth)
+	}
+}
+
+func TestProfileModifyIsAliasForProfileUpdate(t *testing.T) {
+	catalogPath := writeCatalog(t, `{
+		"schemaVersion": 1,
+		"profiles": {
+			"support": {
+				"service": "support",
+				"baseURL": "https://support.example.test/v1",
+				"auth": {"scheme": "bearer", "credential": "api-token"}
+			}
+		}
+	}`)
+	stdin := strings.Join([]string{"", "https://support.example.test/v2", "", "", ""}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin}, "profile", "modify", "support", "--json")
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load updated catalog: %v", err)
+	}
+	profile := catalog.Profiles["support"]
+	if profile.BaseURL != "https://support.example.test/v2" || profile.Auth.Scheme != "bearer" || profile.Auth.Credential != "api-token" {
+		t.Fatalf("updated profile = %+v", profile)
+	}
+}
+
 func TestProfileCreateRejectsDuplicateProfile(t *testing.T) {
 	catalogPath := writeCatalog(t, `{
 		"schemaVersion": 1,

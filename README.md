@@ -15,6 +15,7 @@ api profile path [--json]
 api profile list [--json]
 api profile show <profile> [--json]
 api profile create <profile> [--service <name>] [--base-url <url>] [--auth <scheme>] [auth flags] [--read-only] [--json]
+api profile update <profile> [--json]
 api secret set <profile> <credential> [--json]
 api secret list [<profile>] [--check] [--json]
 api secret delete <profile> <credential> [--json]
@@ -79,6 +80,16 @@ api profile create billing \
 with owner-only access and the file with owner-only read/write access where the
 operating system supports POSIX-like permissions. It never stores credential
 values; use `api secret set` for that.
+
+Existing profiles can be changed interactively:
+
+```sh
+api profile update billing
+```
+
+`profile update` shows existing non-secret values in brackets. Pressing Enter
+keeps the current value. It never prompts for credential values; if credential
+names change, it prints the matching `api secret set` commands to run next.
 
 Schema:
 
