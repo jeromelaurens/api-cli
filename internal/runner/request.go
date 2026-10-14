@@ -120,6 +120,9 @@ func (c *CLI) runRequest(ctx context.Context, args []string) int {
 		return c.writeRequestError(wrapError(CodeInternalError, err, "cannot build HTTP request"), redactor, meta)
 	}
 	applyDefaultHeaders(req)
+	for name, value := range profile.Headers {
+		req.Header.Set(name, value)
+	}
 	for name, values := range agentHeaders {
 		req.Header.Del(name)
 		for _, value := range values {
@@ -295,15 +298,16 @@ func parseAgentHeaders(inputs []string, auth AuthConfig) (http.Header, error) {
 		if !ok || name == "" {
 			return nil, codedError(CodeInvalidArgs, "headers must use Name=Value")
 		}
-		if !validHeaderName(name) || strings.ContainsAny(value, "\r\n") {
-			return nil, codedError(CodeForbiddenHeader, "header %s is not allowed", name)
-		}
-		if isForbiddenHeader(name, auth) {
+		if !allowedHeader(name, value, auth) {
 			return nil, codedError(CodeForbiddenHeader, "header %s is not allowed", name)
 		}
 		headers.Set(http.CanonicalHeaderKey(name), value)
 	}
 	return headers, nil
+}
+
+func allowedHeader(name string, value string, auth AuthConfig) bool {
+	return validHeaderName(name) && !strings.ContainsAny(value, "\r\n") && !isForbiddenHeader(name, auth)
 }
 
 func isForbiddenHeader(name string, auth AuthConfig) bool {

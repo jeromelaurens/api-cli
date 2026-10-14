@@ -22,8 +22,8 @@ Commands:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
-  api profile create <profile> [--service name] [--base-url url] [--auth scheme] [auth flags] [--read-only] [--json]
-  api profile update <profile> [--json]
+  api profile create <profile> [--service name] [--base-url url] [--auth scheme] [auth flags] [--default-header Name=Value] [--read-only] [--json]
+  api profile update <profile> [--default-header Name=Value] [--json]
   api secret set <profile> <credential> [--json]
   api secret list [<profile>] [--check] [--json]
   api secret delete <profile> <credential> [--json]
@@ -71,8 +71,8 @@ const profileHelp = `Usage:
   api profile path [--json]
   api profile list [--json]
   api profile show <profile> [--json]
-  api profile create <profile> [--service name] [--base-url url] [--auth bearer|header|query|basic] [--read-only] [--json]
-  api profile update <profile> [--json]
+  api profile create <profile> [--service name] [--base-url url] [--auth bearer|header|query|basic] [--default-header Name=Value] [--read-only] [--json]
+  api profile update <profile> [--default-header Name=Value] [--json]
 
 Profile catalog:
   Default path: ~/.api/profiles.json
@@ -85,6 +85,11 @@ Auth flags:
   header: --header name --credential name
   query: --param name --credential name
   basic: --username-credential name --password-credential name
+
+Default headers:
+  --default-header Name=Value (repeatable) stores a fixed non-secret header sent on every request.
+  An empty value (Name=) removes it. A request --header with the same name replaces it.
+  Forbidden headers are the same as for api request --header.
 
 Interactive mode:
   Missing non-secret fields are prompted. The service name defaults to the profile name.

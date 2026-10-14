@@ -14,8 +14,8 @@ api request <profile> <METHOD> <path> [--query "..."] [--body file|-] [--header 
 api profile path [--json]
 api profile list [--json]
 api profile show <profile> [--json]
-api profile create <profile> [--service <name>] [--base-url <url>] [--auth <scheme>] [auth flags] [--read-only] [--json]
-api profile update <profile> [--json]
+api profile create <profile> [--service <name>] [--base-url <url>] [--auth <scheme>] [auth flags] [--default-header "Name=Value"] [--read-only] [--json]
+api profile update <profile> [--default-header "Name=Value"] [--json]
 api secret set <profile> <credential> [--json]
 api secret list [<profile>] [--check] [--json]
 api secret delete <profile> <credential> [--json]
@@ -90,6 +90,11 @@ api profile update billing
 `profile update` shows existing non-secret values in brackets. Pressing Enter
 keeps the current value. It never prompts for credential values; if credential
 names change, it prints the matching `api secret set` commands to run next.
+
+A profile can carry fixed non-secret headers sent on every request, set with
+the repeatable `--default-header "Name=Value"` on `profile create` or
+`profile update` (`Name=` removes one). They follow the agent header rules
+below, and an agent `--header` with the same name replaces them.
 
 Schema:
 

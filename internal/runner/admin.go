@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -102,6 +103,7 @@ type profileCreateOptions struct {
 	Credential         string
 	UsernameCredential string
 	PasswordCredential string
+	DefaultHeaders     []string
 }
 
 const supportedAuthSchemePromptValues = "bearer|header|query|basic"
@@ -121,6 +123,14 @@ func writeProfileText(out io.Writer, name string, profile Profile) {
 		fmt.Fprintf(out, "Query parameter: %s\nCredential: %s\n", profile.Auth.Param, profile.Auth.Credential)
 	case "basic":
 		fmt.Fprintf(out, "Username credential: %s\nPassword credential: %s\n", profile.Auth.UsernameCredential, profile.Auth.PasswordCredential)
+	}
+	names := make([]string, 0, len(profile.Headers))
+	for name := range profile.Headers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintf(out, "Default header: %s=%s\n", name, profile.Headers[name])
 	}
 }
 
@@ -166,39 +176,40 @@ func (c *CLI) runProfileCreate(args []string, jsonMode bool) int {
 }
 
 func (c *CLI) runProfileUpdate(args []string, jsonMode bool) int {
-	if len(args) != 1 {
-		return c.writeAdminError(codedError(CodeInvalidArgs, "usage: api profile update <profile>"), jsonMode)
+	name, defaultHeaders, err := parseProfileUpdateArgs(args)
+	if err != nil {
+		return c.writeAdminError(err, jsonMode)
 	}
 	catalog, err := LoadCatalog(c.ProfilesPath)
 	if err != nil {
 		if codeOf(err) == CodeProfileCatalogMissing {
-			err = codedError(CodeProfileNotFound, "profile %s not found", args[0])
+			err = codedError(CodeProfileNotFound, "profile %s not found", name)
 		}
 		return c.writeAdminError(err, jsonMode)
 	}
-	existing, err := lookupProfile(catalog, args[0])
+	existing, err := lookupProfile(catalog, name)
 	if err != nil {
 		return c.writeAdminError(err, jsonMode)
 	}
-	profile, err := c.buildProfileUpdate(args[0], existing)
+	profile, err := c.buildProfileUpdate(name, existing, defaultHeaders)
 	if err != nil {
 		return c.writeAdminError(err, jsonMode)
 	}
-	catalog.Profiles[args[0]] = profile
+	catalog.Profiles[name] = profile
 	if err := SaveCatalog(c.ProfilesPath, *catalog); err != nil {
 		return c.writeAdminError(err, jsonMode)
 	}
 
-	commands := secretCommandsForProfile(args[0], profile)
+	commands := secretCommandsForProfile(name, profile)
 	if jsonMode {
 		return c.writeAdminJSON(map[string]any{
-			"profile":        args[0],
+			"profile":        name,
 			"path":           c.ProfilesPath,
 			"updated":        true,
 			"secretCommands": commands,
 		})
 	}
-	fmt.Fprintf(c.Out, "Updated profile %s in %s\n", args[0], c.ProfilesPath)
+	fmt.Fprintf(c.Out, "Updated profile %s in %s\n", name, c.ProfilesPath)
 	if len(commands) > 0 {
 		fmt.Fprintln(c.Out, "Current credential commands:")
 		for _, command := range commands {
@@ -286,6 +297,15 @@ func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
 			i = next
 		case strings.HasPrefix(arg, "--password-credential="):
 			opts.PasswordCredential = strings.TrimPrefix(arg, "--password-credential=")
+		case arg == "--default-header":
+			value, next, err := requireFlagValue(args, i, "--default-header")
+			if err != nil {
+				return opts, err
+			}
+			opts.DefaultHeaders = append(opts.DefaultHeaders, value)
+			i = next
+		case strings.HasPrefix(arg, "--default-header="):
+			opts.DefaultHeaders = append(opts.DefaultHeaders, strings.TrimPrefix(arg, "--default-header="))
 		case arg == "--read-only":
 			opts.ReadOnly = true
 		case strings.HasPrefix(arg, "-"):
@@ -304,7 +324,61 @@ func parseProfileCreateArgs(args []string) (profileCreateOptions, error) {
 	return opts, nil
 }
 
+func parseProfileUpdateArgs(args []string) (string, []string, error) {
+	var defaultHeaders []string
+	positionals := make([]string, 0, 1)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--default-header":
+			value, next, err := requireFlagValue(args, i, "--default-header")
+			if err != nil {
+				return "", nil, err
+			}
+			defaultHeaders = append(defaultHeaders, value)
+			i = next
+		case strings.HasPrefix(arg, "--default-header="):
+			defaultHeaders = append(defaultHeaders, strings.TrimPrefix(arg, "--default-header="))
+		case strings.HasPrefix(arg, "-"):
+			return "", nil, codedError(CodeInvalidArgs, "unknown profile update flag: %s", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+	if len(positionals) != 1 {
+		return "", nil, codedError(CodeInvalidArgs, "usage: api profile update <profile> [--default-header Name=Value]")
+	}
+	return positionals[0], defaultHeaders, nil
+}
+
+// withDefaultHeaders applies Name=Value inputs; an empty value removes the header.
+func withDefaultHeaders(headers map[string]string, inputs []string) (map[string]string, error) {
+	for _, input := range inputs {
+		name, value, ok := strings.Cut(input, "=")
+		if !ok || name == "" {
+			return nil, codedError(CodeInvalidArgs, "--default-header must use Name=Value")
+		}
+		for existing := range headers {
+			if strings.EqualFold(existing, name) {
+				delete(headers, existing)
+			}
+		}
+		if value == "" {
+			continue
+		}
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		headers[http.CanonicalHeaderKey(name)] = value
+	}
+	return headers, nil
+}
+
 func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile, error) {
+	headers, err := withDefaultHeaders(nil, opts.DefaultHeaders)
+	if err != nil {
+		return Profile{}, err
+	}
 	service, err := c.promptRequired("Service", firstNonEmpty(opts.Service, opts.Name))
 	if err != nil {
 		return Profile{}, err
@@ -321,14 +395,18 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	if err != nil {
 		return Profile{}, err
 	}
-	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: opts.ReadOnly, Auth: auth}
+	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: opts.ReadOnly, Auth: auth, Headers: headers}
 	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{opts.Name: profile}}); err != nil {
 		return Profile{}, err
 	}
 	return profile, nil
 }
 
-func (c *CLI) buildProfileUpdate(profileName string, existing Profile) (Profile, error) {
+func (c *CLI) buildProfileUpdate(profileName string, existing Profile, defaultHeaders []string) (Profile, error) {
+	headers, err := withDefaultHeaders(existing.Headers, defaultHeaders)
+	if err != nil {
+		return Profile{}, err
+	}
 	service, err := c.promptRequired("Service", existing.Service)
 	if err != nil {
 		return Profile{}, err
@@ -350,7 +428,7 @@ func (c *CLI) buildProfileUpdate(profileName string, existing Profile) (Profile,
 	if err != nil {
 		return Profile{}, err
 	}
-	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: readOnly, Auth: auth}
+	profile := Profile{Service: service, BaseURL: baseURL, ReadOnly: readOnly, Auth: auth, Headers: headers}
 	if err := ValidateCatalog(Catalog{SchemaVersion: 1, Profiles: map[string]Profile{profileName: profile}}); err != nil {
 		return Profile{}, err
 	}

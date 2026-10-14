@@ -24,10 +24,11 @@ type Catalog struct {
 }
 
 type Profile struct {
-	Service  string     `json:"service"`
-	BaseURL  string     `json:"baseURL"`
-	ReadOnly bool       `json:"readOnly"`
-	Auth     AuthConfig `json:"auth"`
+	Service  string            `json:"service"`
+	BaseURL  string            `json:"baseURL"`
+	ReadOnly bool              `json:"readOnly"`
+	Auth     AuthConfig        `json:"auth"`
+	Headers  map[string]string `json:"headers,omitempty"`
 }
 
 type AuthConfig struct {
@@ -150,6 +151,11 @@ func ValidateCatalog(catalog Catalog) error {
 		}
 		if err := validateAuth(name, profile.Auth); err != nil {
 			return err
+		}
+		for header, value := range profile.Headers {
+			if !allowedHeader(header, value, profile.Auth) {
+				return codedError(CodeForbiddenHeader, "profile %s header %s is not allowed", name, header)
+			}
 		}
 	}
 	return nil

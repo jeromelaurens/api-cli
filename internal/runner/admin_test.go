@@ -502,6 +502,26 @@ func TestProfileCreateRejectsDuplicateProfileBeforeInteractivePrompts(t *testing
 	}
 }
 
+func TestProfileCreateRejectsForbiddenDefaultHeader(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), "profiles.json")
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath},
+		"profile", "create", "billing",
+		"--base-url", "https://billing.example.test/v1",
+		"--auth", "bearer",
+		"--credential", "api-token",
+		"--default-header", "Authorization=Bearer x",
+		"--json",
+	)
+	if result.code == 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	assertJSONError(t, result.stdout, CodeForbiddenHeader)
+	if _, err := os.Stat(catalogPath); !os.IsNotExist(err) {
+		t.Fatalf("catalog should not be written, stat err = %v", err)
+	}
+}
+
 func TestProfileCreateRejectsPresetsToKeepCLIGeneric(t *testing.T) {
 	result := runCLI(t, testCLIOptions{profilesPath: filepath.Join(t.TempDir(), "profiles.json")},
 		"profile", "create", "dolibarr", "--preset", "dolibarr", "--json",

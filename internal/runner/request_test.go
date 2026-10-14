@@ -154,6 +154,38 @@ func TestRequestRejectsQueryAuthCollision(t *testing.T) {
 	assertNoLeak(t, result.stdout, "query-token")
 }
 
+func TestRequestSendsProfileDefaultHeaderUnlessRequestHeaderReplacesIt(t *testing.T) {
+	var seen [][]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Values("X-Crisp-Tier"))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true}`)
+	}))
+	t.Cleanup(server.Close)
+
+	catalogPath := writeSingleProfileCatalog(t, "crisp", server.URL, false, `"auth": {"scheme": "basic", "usernameCredential": "identifier", "passwordCredential": "key"}`)
+	store := NewMemoryCredentialStore()
+	_ = store.Set("crisp/identifier", "crisp-id")
+	_ = store.Set("crisp/key", "crisp-key")
+	opts := testCLIOptions{profilesPath: catalogPath, store: store}
+
+	if update := runCLI(t, opts, "profile", "update", "crisp", "--default-header", "X-Crisp-Tier=plugin", "--json"); update.code != 0 {
+		t.Fatalf("update exit=%d stdout=%q stderr=%q", update.code, update.stdout, update.stderr)
+	}
+	for _, args := range [][]string{
+		{"request", "crisp", "GET", "/website"},
+		{"request", "crisp", "GET", "/website", "--header", "x-crisp-tier=website"},
+	} {
+		if result := runCLI(t, opts, args...); result.code != 0 {
+			t.Fatalf("%v exit=%d stdout=%q stderr=%q", args, result.code, result.stdout, result.stderr)
+		}
+	}
+
+	if fmt.Sprint(seen) != "[[plugin] [website]]" {
+		t.Fatalf("X-Crisp-Tier values seen = %v", seen)
+	}
+}
+
 func TestRequestBodyFileAndStdinContentTypePolicy(t *testing.T) {
 	var seen []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

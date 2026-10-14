@@ -101,7 +101,7 @@ metadata:
 | Header auth `-H "DOLAPIKEY: $T"` | drop it — profile auth `header` carries it |
 | Bearer `-H "Authorization: Bearer $T"` | drop it — profile auth `bearer` |
 | Query auth `?api_token=$T` | drop it — profile auth `query`; **never** put it in `--query` |
-| Basic `base64(id:key)` + `-H Authorization` | drop it — profile auth `basic`; keep **non-auth** headers via `--header` (e.g. `--header "X-Crisp-Tier=plugin"`) |
+| Basic `base64(id:key)` + `-H Authorization` | drop it — profile auth `basic`; keep **non-auth** headers via `--header`, or in the profile when fixed (e.g. `X-Crisp-Tier=plugin` as a profile default header) |
 | Query string `?a=b&c=d` | `--query "a=b&c=d"` (api-cli encodes; no curl `-g`/globoff needed for `filter[...]`) |
 | Inline body `-d '{...}'` | `printf '%s' '{...}' \| … --body -` |
 | File body `-d @file.json` | `--body /tmp/file.json` |
