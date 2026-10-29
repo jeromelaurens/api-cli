@@ -2,6 +2,9 @@ package runner
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -42,6 +45,48 @@ func TestSecretSetListCheckAndDeleteWithMemoryStore(t *testing.T) {
 	mustJSON(t, after.stdout, &payload)
 	if payload.Credentials[0].Present {
 		t.Fatalf("credential should not be present after delete: %+v", payload)
+	}
+}
+
+func TestProfilesOfOneServiceShareCredentials(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, password, _ := r.BasicAuth()
+		seen = append(seen, user+":"+password)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{}`)
+	}))
+	t.Cleanup(server.Close)
+
+	auth := `"auth": {"scheme": "basic", "usernameCredential": "email", "passwordCredential": "api-token"}`
+	catalogPath := writeCatalog(t, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"profiles": {
+			"site-a": {"service": "atlassian", "baseURL": %q, %s},
+			"site-b": {"service": "atlassian", "baseURL": %q, %s}
+		}
+	}`, server.URL, auth, server.URL, auth))
+	store := NewMemoryCredentialStore()
+
+	for _, credential := range []struct{ name, value string }{{"email", "me@example.test"}, {"api-token", "shared-token"}} {
+		set := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: credential.value, store: store}, "secret", "set", "site-a", credential.name)
+		if set.code != 0 {
+			t.Fatalf("set exit=%d stdout=%q stderr=%q", set.code, set.stdout, set.stderr)
+		}
+	}
+	if len(store.values) != 2 || store.values["atlassian/email"] != "me@example.test" || store.values["atlassian/api-token"] != "shared-token" {
+		t.Fatalf("keyring keys = %v, want one entry per service credential", store.values)
+	}
+
+	opts := testCLIOptions{profilesPath: catalogPath, store: store}
+	if list := runCLI(t, opts, "secret", "list", "site-b", "--check"); strings.Count(list.stdout, "present=true") != 2 {
+		t.Fatalf("site-b list = %q", list.stdout)
+	}
+	if result := runCLI(t, opts, "request", "site-b", "GET", "/myself"); result.code != 0 {
+		t.Fatalf("request exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+	if fmt.Sprint(seen) != "[me@example.test:shared-token]" {
+		t.Fatalf("basic auth seen = %v", seen)
 	}
 }
 

@@ -98,8 +98,10 @@ Validation:
 Credentials are stored with `github.com/zalando/go-keyring`.
 
 - Keyring service: `api-cli`
-- Keyring key format: `<profile>/<credential>`
+- Keyring key format: `<service>/<credential>`
 - Example: `dolibarr/api-key`
+- Profiles of the same service share one entry per credential, so a credential
+  used by several profiles (one per site of the same account) is stored once.
 
 Credential commands:
 
@@ -115,7 +117,8 @@ a TTY. `secret list` reads the profile catalog by default and accesses the
 keyring only with `--check`.
 
 `secret set` and `secret delete` validate the profile and credential name
-against the profile catalog to avoid orphaned keyring entries from typos.
+against the profile catalog to avoid orphaned keyring entries from typos, then
+act on the keyring entry of the profile's service.
 
 ## Auth Schemes
 

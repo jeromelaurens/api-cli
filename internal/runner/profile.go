@@ -256,6 +256,7 @@ func lookupProfile(catalog *Catalog, name string) (Profile, error) {
 	return profile, nil
 }
 
-func credentialKey(profile, credential string) string {
-	return fmt.Sprintf("%s/%s", profile, credential)
+// credentialKey names a keyring entry by service, so profiles of one service share it.
+func credentialKey(service, credential string) string {
+	return fmt.Sprintf("%s/%s", service, credential)
 }

@@ -586,14 +586,15 @@ func (c *CLI) runSecret(args []string) int {
 		if len(args) != 3 {
 			return c.writeAdminError(codedError(CodeInvalidArgs, "usage: api secret set <profile> <credential>"), jsonMode)
 		}
-		if err := c.validateCredentialRef(args[1], args[2]); err != nil {
+		profile, err := c.validateCredentialRef(args[1], args[2])
+		if err != nil {
 			return c.writeAdminError(err, jsonMode)
 		}
 		value, err := c.readCredentialValue()
 		if err != nil {
 			return c.writeAdminError(err, jsonMode)
 		}
-		key := credentialKey(args[1], args[2])
+		key := credentialKey(profile.Service, args[2])
 		if err := c.CredentialStore.Set(key, value); err != nil {
 			return c.writeAdminError(err, jsonMode)
 		}
@@ -615,10 +616,11 @@ func (c *CLI) runSecret(args []string) int {
 		if len(args) != 3 {
 			return c.writeAdminError(codedError(CodeInvalidArgs, "usage: api secret delete <profile> <credential>"), jsonMode)
 		}
-		if err := c.validateCredentialRef(args[1], args[2]); err != nil {
+		profile, err := c.validateCredentialRef(args[1], args[2])
+		if err != nil {
 			return c.writeAdminError(err, jsonMode)
 		}
-		key := credentialKey(args[1], args[2])
+		key := credentialKey(profile.Service, args[2])
 		if err := c.CredentialStore.Delete(key); err != nil {
 			return c.writeAdminError(err, jsonMode)
 		}
@@ -669,7 +671,7 @@ func (c *CLI) runSecretList(profileFilter string, check bool, jsonMode bool) int
 		fmt.Fprintf(c.Out, "Profile: %s\n", name)
 		for _, credential := range sortedCredentials(profile) {
 			if check {
-				present, err := c.credentialPresent(name, credential)
+				present, err := c.credentialPresent(profile.Service, credential)
 				if err != nil {
 					return c.writeAdminError(err, jsonMode)
 				}
@@ -699,7 +701,7 @@ func (c *CLI) secretProfilePayload(catalog *Catalog, profileName string, check b
 	for _, credential := range credentials {
 		item := secretCredentialListItem{Name: credential}
 		if check {
-			present, err := c.credentialPresent(profileName, credential)
+			present, err := c.credentialPresent(profile.Service, credential)
 			if err != nil {
 				return secretProfilePayload{}, err
 			}
@@ -710,8 +712,8 @@ func (c *CLI) secretProfilePayload(catalog *Catalog, profileName string, check b
 	return secretProfilePayload{Profile: profileName, Credentials: items}, nil
 }
 
-func (c *CLI) credentialPresent(profileName string, credential string) (bool, error) {
-	_, err := c.CredentialStore.Get(credentialKey(profileName, credential))
+func (c *CLI) credentialPresent(service string, credential string) (bool, error) {
+	_, err := c.CredentialStore.Get(credentialKey(service, credential))
 	if err == nil {
 		return true, nil
 	}
@@ -721,21 +723,21 @@ func (c *CLI) credentialPresent(profileName string, credential string) (bool, er
 	return false, err
 }
 
-func (c *CLI) validateCredentialRef(profileName string, credential string) error {
+func (c *CLI) validateCredentialRef(profileName string, credential string) (Profile, error) {
 	catalog, err := LoadCatalog(c.ProfilesPath)
 	if err != nil {
-		return err
+		return Profile{}, err
 	}
 	profile, err := lookupProfile(catalog, profileName)
 	if err != nil {
-		return err
+		return Profile{}, err
 	}
 	for _, expected := range requiredCredentials(profile) {
 		if credential == expected {
-			return nil
+			return profile, nil
 		}
 	}
-	return codedError(CodeProfileCatalogInvalid, "credential %s is not declared by profile %s", credential, profileName)
+	return Profile{}, codedError(CodeProfileCatalogInvalid, "credential %s is not declared by profile %s", credential, profileName)
 }
 
 func (c *CLI) readCredentialValue() (string, error) {

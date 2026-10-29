@@ -107,7 +107,8 @@ const secretHelp = `Usage:
   api secret delete <profile> <credential> [--json]
 
 Credential storage:
-  Credentials are stored in the OS keyring service api-cli with keys <profile>/<credential>.
+  Credentials are stored in the OS keyring service api-cli with keys <service>/<credential>.
+  Profiles of the same service share one entry per credential; set or delete it through any of them.
   There is no secret get command.
   secret set reads from a masked prompt when attached to a terminal or from stdin when piped.
 `

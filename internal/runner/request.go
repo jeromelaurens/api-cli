@@ -352,7 +352,7 @@ func (c *CLI) readRequestBody(bodyPath string) ([]byte, error) {
 func (c *CLI) loadRequestCredentials(profileName string, profile Profile, redactor *OutputRedactor) (map[string]string, error) {
 	credentials := make(map[string]string)
 	for _, credential := range requiredCredentials(profile) {
-		value, err := c.CredentialStore.Get(credentialKey(profileName, credential))
+		value, err := c.CredentialStore.Get(credentialKey(profile.Service, credential))
 		if err != nil {
 			if codeOf(err) == CodeCredentialMissing {
 				return nil, codedError(CodeCredentialMissing, "credential %s is missing for profile %s", credential, profileName)

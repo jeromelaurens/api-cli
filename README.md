@@ -40,8 +40,10 @@ github.com/jeromelaurens/api-cli
   Codex config, MCP config, shell arguments, logs, or model-visible context.
 - Credentials live in the OS keyring through `github.com/zalando/go-keyring`
   under the keyring service `api-cli`.
-- Keyring keys use `<profile>/<credential>`, for example
-  `dolibarr/api-key`.
+- Keyring keys use `<service>/<credential>`, for example
+  `dolibarr/api-key`. Profiles of the same service share one entry per
+  credential: `api secret set|delete <profile> <credential>` acts on the
+  entry of the profile's service.
 - The CLI registers every loaded credential and credential-derived value with
   the redactor before emitting output.
 - There is no MCP server and no third-party API broker in v1.

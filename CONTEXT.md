@@ -47,6 +47,7 @@ _Avoid_: anonymization, sanitization
 - A **Profile Catalog** contains zero or more **API Profiles**.
 - An **API Request** targets exactly one **API Profile**.
 - An **API Profile** has one **Auth Scheme** and one or more **Credentials**.
+- **API Profiles** of the same **API Service** share their **Credentials**: each is stored once per service.
 - A **Mutation** is a kind of **API Request**.
 - A **Response Envelope** is emitted for every **API Request** result.
 - **Redaction** applies to credentials and credential-derived values known to the CLI.
