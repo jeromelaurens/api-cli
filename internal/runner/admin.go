@@ -379,19 +379,21 @@ func (c *CLI) buildProfileFromCreateOptions(opts profileCreateOptions) (Profile,
 	if err != nil {
 		return Profile{}, err
 	}
-	service, err := c.promptRequired("Service", firstNonEmpty(opts.Service, opts.Name))
+	service := opts.Service
+	if service == "" {
+		if service, err = c.promptRequired("Service", opts.Name); err != nil {
+			return Profile{}, err
+		}
+	}
+	baseURL, err := c.promptMissing("Base URL", opts.BaseURL)
 	if err != nil {
 		return Profile{}, err
 	}
-	baseURL, err := c.promptRequired("Base URL", opts.BaseURL)
+	scheme, err := c.promptMissing(profileCreateAuthSchemePromptLabel(), opts.AuthScheme)
 	if err != nil {
 		return Profile{}, err
 	}
-	scheme, err := c.promptRequired(profileCreateAuthSchemePromptLabel(), opts.AuthScheme)
-	if err != nil {
-		return Profile{}, err
-	}
-	auth, err := c.promptAuthConfig(strings.ToLower(scheme), opts)
+	auth, err := c.promptAuthConfig(strings.ToLower(scheme), opts, c.promptMissing)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -424,7 +426,7 @@ func (c *CLI) buildProfileUpdate(profileName string, existing Profile, defaultHe
 		return Profile{}, err
 	}
 	scheme = strings.ToLower(scheme)
-	auth, err := c.promptAuthConfig(scheme, profileUpdateAuthDefaults(existing.Auth, scheme))
+	auth, err := c.promptAuthConfig(scheme, profileUpdateAuthDefaults(existing.Auth, scheme), c.promptRequired)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -453,40 +455,41 @@ func profileUpdateAuthDefaults(auth AuthConfig, scheme string) profileCreateOpti
 	}
 }
 
-func (c *CLI) promptAuthConfig(scheme string, opts profileCreateOptions) (AuthConfig, error) {
+// promptAuthConfig asks each auth field through ask, which receives the field's current value.
+func (c *CLI) promptAuthConfig(scheme string, opts profileCreateOptions, ask func(label, value string) (string, error)) (AuthConfig, error) {
 	switch scheme {
 	case "bearer":
-		credential, err := c.promptRequired("Credential name", opts.Credential)
+		credential, err := ask("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "bearer", Credential: credential}, nil
 	case "header":
-		header, err := c.promptRequired("Header name", opts.Header)
+		header, err := ask("Header name", opts.Header)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		credential, err := c.promptRequired("Credential name", opts.Credential)
+		credential, err := ask("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "header", Header: header, Credential: credential}, nil
 	case "query":
-		param, err := c.promptRequired("Query parameter", opts.Param)
+		param, err := ask("Query parameter", opts.Param)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		credential, err := c.promptRequired("Credential name", opts.Credential)
+		credential, err := ask("Credential name", opts.Credential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
 		return AuthConfig{Scheme: "query", Param: param, Credential: credential}, nil
 	case "basic":
-		username, err := c.promptRequired("Username credential name", opts.UsernameCredential)
+		username, err := ask("Username credential name", opts.UsernameCredential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
-		password, err := c.promptRequired("Password credential name", opts.PasswordCredential)
+		password, err := ask("Password credential name", opts.PasswordCredential)
 		if err != nil {
 			return AuthConfig{}, err
 		}
@@ -496,13 +499,12 @@ func (c *CLI) promptAuthConfig(scheme string, opts profileCreateOptions) (AuthCo
 	}
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
+// promptMissing keeps a value given by a flag and prompts only when it is empty.
+func (c *CLI) promptMissing(label string, value string) (string, error) {
+	if value != "" {
+		return value, nil
 	}
-	return ""
+	return c.promptRequired(label, "")
 }
 
 func (c *CLI) promptRequired(label string, defaultValue string) (string, error) {

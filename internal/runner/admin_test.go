@@ -298,6 +298,34 @@ func TestProfileCreateGenericInteractiveBearerProfile(t *testing.T) {
 	}
 }
 
+func TestProfileCreatePromptsOnlyForFieldsMissingFromFlags(t *testing.T) {
+	catalogPath := filepath.Join(t.TempDir(), ".api", "profiles.json")
+	stdin := strings.Join([]string{
+		"email",
+		"api-token",
+	}, "\n") + "\n"
+
+	result := runCLI(t, testCLIOptions{profilesPath: catalogPath, stdin: stdin},
+		"profile", "create", "stationpaye",
+		"--service", "atlassian",
+		"--base-url", "https://stationpaye.atlassian.net",
+		"--auth", "basic",
+		"--json",
+	)
+	if result.code != 0 || result.stderr != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", result.code, result.stdout, result.stderr)
+	}
+
+	catalog, err := LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatalf("load created catalog: %v", err)
+	}
+	profile := catalog.Profiles["stationpaye"]
+	if profile.Service != "atlassian" || profile.BaseURL != "https://stationpaye.atlassian.net" || profile.Auth.Scheme != "basic" || profile.Auth.UsernameCredential != "email" || profile.Auth.PasswordCredential != "api-token" {
+		t.Fatalf("created profile = %+v", profile)
+	}
+}
+
 func TestProfileCreateInteractiveAuthPromptListsSupportedSchemes(t *testing.T) {
 	label := profileCreateAuthSchemePromptLabel()
 	for _, scheme := range []string{"bearer", "header", "query", "basic"} {
